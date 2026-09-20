@@ -3,13 +3,18 @@ import gsap from 'gsap'
 import GrassSkyScene, { PAN_DURATION, type CameraView } from './GrassSkyScene'
 
 const LOAD_MS = 900
+const RAIL_W = 44
+const CLIP_FULL = 'inset(0px 0px 0px 0px round 0px 0px 0px 0px)'
+const CLIP_RAIL = `inset(0px 0px 0px ${RAIL_W}px round 20px 0px 0px 20px)`
 
 function App() {
   const [progress, setProgress] = useState(0)
   const [entered, setEntered] = useState(false)
   const heroRef = useRef<HTMLDivElement>(null)
   const taglineRef = useRef<HTMLDivElement>(null)
-  const uiRef = useRef<HTMLDivElement>(null)
+  const sceneRef = useRef<HTMLDivElement>(null)
+  const navRef = useRef<HTMLElement>(null)
+  const topRef = useRef<HTMLDivElement>(null)
   const cameraView = useRef<CameraView>({ shift: 1, clouds: 0 })
 
   useEffect(() => {
@@ -34,39 +39,63 @@ function App() {
     const pan = { duration: PAN_DURATION, ease: 'power4.inOut' }
     tl.to([heroRef.current, taglineRef.current], { y: '-100vh', ...pan }, 0)
     tl.to(cameraView.current, { shift: 0, clouds: 1, ...pan }, 0)
-    if (uiRef.current) {
-      const settle = PAN_DURATION * 0.8
-      tl.set(uiRef.current, { opacity: 1 }, settle)
-      tl.fromTo(
-        uiRef.current.children,
-        { opacity: 0 },
-        { opacity: 1, duration: 1, stagger: 0.1, ease: 'power2.out' },
-        settle,
-      )
-    }
+    // Last 0.8s of the pan: the rail slides in, the scene insets beside it, and the top widget slides down.
+    const settle = PAN_DURATION - 0.8
+    const enter = { duration: 0.8, ease: 'power2.out' }
+    tl.to(navRef.current, { x: 0, opacity: 1, ...enter }, settle)
+    tl.to(sceneRef.current, { clipPath: CLIP_RAIL, ...enter }, settle)
+    tl.to(topRef.current, { y: 0, opacity: 1, ...enter }, settle)
   }
 
   return (
-    <main className="relative h-full w-full overflow-hidden rounded-r-2xl border-2 border-l-0 border-white bg-white md:rounded-r-[20px]">
-      <div className="absolute inset-y-0 left-11 right-0 overflow-hidden rounded-l-2xl">
+    <main className="relative h-full w-full overflow-hidden rounded-2xl border-2 border-white bg-white md:rounded-[20px]">
+      <div ref={sceneRef} className="absolute inset-0" style={{ clipPath: CLIP_FULL }}>
         <GrassSkyScene view={cameraView.current} />
       </div>
 
-      <div ref={uiRef} className="pointer-events-none absolute inset-0 z-10 opacity-0">
+      <div className="pointer-events-none absolute inset-0 z-10">
         <div
-          className={`absolute top-6 right-6 flex gap-1.5 rounded-2xl border border-white/60 bg-white/70 p-1.5 shadow-sm backdrop-blur-md ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
+          ref={topRef}
+          style={{ transform: 'translateY(-100%)', opacity: 0 }}
+          className={`c-window c-window--contact ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
         >
-          {['Ig', 'Tw', 'Ln', 'Mail'].map((label) => (
-            <span
-              key={label}
-              className="cursor-pointer rounded-lg border border-black/5 bg-white px-3 py-1.5 font-sans text-xs font-medium text-neutral-800 shadow-[0_1px_1px_rgba(0,0,0,0.08)]"
-            >
-              {label}
-            </span>
-          ))}
+          <div className="c-window__header">
+            <div className="c-window__header__left">
+              <div className="c-window__header__title">Null address</div>
+            </div>
+            <div className="c-window__header__dots">
+              <div className="c-window__header__dots__dot first" />
+              <div className="c-window__header__dots__dot" />
+            </div>
+          </div>
+          <div className="c-window__inner">
+            <div className="c-window__content">
+              <div className="c-window__divider" />
+              <div className="c-window__links">
+                {[
+                  { label: 'Ln', href: 'https://www.linkedin.com/in/satyam-in/' },
+                  { label: 'X', href: 'https://x.com/x__satyam' },
+                  { label: 'Mail', href: 'mailto:satyamsharma.main@gmail.com' },
+                  { label: 'Cd', href: 'https://codolio.com/profile/Satyam_edu' },
+                ].map(({ label, href }) => (
+                  <a
+                    key={label}
+                    href={href}
+                    target={href.startsWith('http') ? '_blank' : undefined}
+                    rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                    className="c-button c-button--main"
+                  >
+                    <span>{label}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         <nav
+          ref={navRef}
+          style={{ transform: 'translateX(-100%)', opacity: 0 }}
           className={`absolute inset-y-0 left-0 flex w-11 flex-col items-center bg-white py-3 ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
         >
           <svg className="h-8 w-8 shrink-0 text-white" viewBox="0 0 32 32">
@@ -100,7 +129,7 @@ function App() {
         </nav>
       </div>
 
-      <div ref={heroRef} className={`absolute inset-0 ${entered ? 'pointer-events-none' : ''}`}>
+      <div ref={heroRef} className={`absolute inset-0 z-20 ${entered ? 'pointer-events-none' : ''}`}>
         <div
           className="absolute bottom-6 left-12 md:left-28"
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}
