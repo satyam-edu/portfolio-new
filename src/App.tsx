@@ -47,24 +47,12 @@ function App() {
   }
 
   return (
-    <main className="relative h-full w-full overflow-hidden rounded-2xl border-2 border-white md:rounded-[20px]">
-      <GrassSkyScene view={cameraView.current} />
+    <main className="relative h-full w-full overflow-hidden rounded-r-2xl border-2 border-l-0 border-white bg-white md:rounded-r-[20px]">
+      <div className="absolute inset-y-0 left-11 right-0 overflow-hidden rounded-l-2xl">
+        <GrassSkyScene view={cameraView.current} />
+      </div>
 
       <div ref={uiRef} className="pointer-events-none absolute inset-0 z-10 opacity-0">
-        <svg
-          className="absolute top-6 left-6 h-8 w-8 text-white"
-          viewBox="0 0 32 32"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        >
-          <circle cx="16" cy="16" r="14" />
-          <circle cx="11.5" cy="13" r="1.4" fill="currentColor" stroke="none" />
-          <circle cx="20.5" cy="13" r="1.4" fill="currentColor" stroke="none" />
-          <path d="M10.5 19c1.4 2 3.4 3 5.5 3s4.1-1 5.5-3" />
-        </svg>
-
         <div
           className={`absolute top-6 right-6 flex gap-1.5 rounded-2xl border border-white/60 bg-white/70 p-1.5 shadow-sm backdrop-blur-md ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
         >
@@ -78,66 +66,38 @@ function App() {
           ))}
         </div>
 
-        <div className="absolute top-1/2 left-3">
-          <div
-            className={`flex items-center gap-8 font-sans text-[10px] tracking-[0.25em] whitespace-nowrap text-white/80 uppercase ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
-            style={{ transform: 'rotate(-90deg) translateX(-50%)', transformOrigin: 'left top' }}
-          >
-            <span className="cursor-pointer">Contact</span>
-            <span className="cursor-pointer">Projects</span>
-            <span className="cursor-pointer">About</span>
-          </div>
-        </div>
-
-        <div
-          className={`absolute bottom-8 left-12 flex gap-6 ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        <nav
+          className={`absolute inset-y-0 left-0 flex w-11 flex-col items-center bg-white py-3 ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
         >
-          {[
-            {
-              label: 'UniTrack & Dev',
-              icon: <path d="M9 8l-4 4 4 4M15 8l4 4-4 4" />,
-            },
-            {
-              label: 'UI/UX & Graphics',
-              icon: (
-                <>
-                  <rect x="4" y="4" width="10" height="10" rx="1.5" />
-                  <rect x="10" y="10" width="10" height="10" rx="1.5" />
-                </>
-              ),
-            },
-            {
-              label: 'GitHub',
-              icon: (
-                <path
-                  fill="currentColor"
-                  stroke="none"
-                  d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.5.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0112 6.84c.85 0 1.71.11 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0022 12c0-5.52-4.48-10-10-10z"
-                />
-              ),
-            },
-          ].map(({ label, icon }) => (
-            <div key={label} className="flex w-20 cursor-pointer flex-col items-center gap-2">
-              <div className="relative flex h-14 w-12 items-center justify-center rounded-[6px] bg-white shadow-[0_2px_6px_rgba(0,0,0,0.18)]">
-                <span className="absolute top-0 right-0 h-3 w-3 rounded-bl-[4px] bg-neutral-200" />
-                <svg
-                  className="h-6 w-6 text-neutral-900"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+          <svg className="h-8 w-8 shrink-0 text-white" viewBox="0 0 32 32">
+            <circle cx="16" cy="16" r="16" fill="#111" />
+            <circle cx="11.5" cy="13" r="1.6" fill="currentColor" />
+            <circle cx="20.5" cy="13" r="1.6" fill="currentColor" />
+            <path d="M10.5 19c1.4 2 3.4 3 5.5 3s4.1-1 5.5-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <div className="mt-auto mb-6 flex flex-col items-center gap-5">
+            {['Skills', 'Work', 'Contact'].map((label, i) => (
+              <div key={label} className="flex flex-col items-center gap-5">
+                {i > 0 && <span className="h-px w-4 bg-black/15" />}
+                <a
+                  href={`#${label.toLowerCase()}`}
+                  className="font-sans text-xs font-semibold tracking-[0.15em] text-neutral-900 uppercase transition-opacity [writing-mode:vertical-rl] hover:opacity-50"
                 >
-                  {icon}
-                </svg>
+                  {label}
+                </a>
               </div>
-              <span className="text-center font-sans text-[11px] leading-tight font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
-                {label}
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <svg
+            className="h-5 w-5 shrink-0 cursor-pointer text-neutral-900 transition-opacity hover:opacity-50"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
+            <path d="M5 10v4M9 6v12M13 9v6M17 4v16M21 11v2" />
+          </svg>
+        </nav>
       </div>
 
       <div ref={heroRef} className={`absolute inset-0 ${entered ? 'pointer-events-none' : ''}`}>
