@@ -4,15 +4,18 @@ import GrassSkyScene, { PAN_DURATION, type CameraView } from './GrassSkyScene'
 
 const LOAD_MS = 900
 const RAIL_W = 44
+const BUTTERFLY_COLORS = ['#e63946', '#ff7b00', '#ffd166', '#80ed99', '#06d6a0', '#00b4d8', '#4361ee', '#b5179e', '#ff5d8f', '#f8f9fa']
 const CLIP_FULL = 'inset(0px 0px 0px 0px round 0px 0px 0px 0px)'
 const CLIP_RAIL = `inset(0px 0px 0px ${RAIL_W}px round 20px 0px 0px 20px)`
 
 function App() {
   const [progress, setProgress] = useState(0)
   const [entered, setEntered] = useState(false)
-  const heroRef = useRef<HTMLDivElement>(null)
   const taglineRef = useRef<HTMLDivElement>(null)
+  const heroRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<HTMLDivElement>(null)
+  const [butterflyIdx, setButterflyIdx] = useState(0)
+  const desktopRef = useRef<HTMLDivElement>(null)
   const navRef = useRef<HTMLElement>(null)
   const topRef = useRef<HTMLDivElement>(null)
   const cameraView = useRef<CameraView>({ shift: 1, clouds: 0 })
@@ -37,20 +40,34 @@ function App() {
     // exactly the angle that moves the horizon 100vh, so both read as a single physical camera pan.
     const tl = gsap.timeline()
     const pan = { duration: PAN_DURATION, ease: 'power4.inOut' }
-    tl.to([heroRef.current, taglineRef.current], { y: '-100vh', ...pan }, 0)
+    tl.to(heroRef.current, { y: '-100vh', ...pan }, 0)
+    // tagline fades out with the landing prompts, then back in over the settled grass
+    tl.to(taglineRef.current, { opacity: 0, duration: 0.4, ease: 'power2.out' }, 0)
+    tl.to(taglineRef.current, { opacity: 1, duration: 0.8, ease: 'power2.out' }, PAN_DURATION)
     tl.to(cameraView.current, { shift: 0, clouds: 1, ...pan }, 0)
     // Last 0.8s of the pan: the rail slides in, the scene insets beside it, and the top widget slides down.
     const settle = PAN_DURATION - 0.8
     const enter = { duration: 0.8, ease: 'power2.out' }
     tl.to(navRef.current, { x: 0, opacity: 1, ...enter }, settle)
     tl.to(sceneRef.current, { clipPath: CLIP_RAIL, ...enter }, settle)
+    tl.to(desktopRef.current, { opacity: 1, ...enter }, settle)
     tl.to(topRef.current, { y: 0, opacity: 1, ...enter }, settle)
   }
+
+  useEffect(() => {
+    if (progress < 100 || entered) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') handleEnter()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress, entered])
 
   return (
     <main className="relative h-full w-full overflow-hidden rounded-2xl border-2 border-white bg-white md:rounded-[20px]">
       <div ref={sceneRef} className="absolute inset-0" style={{ clipPath: CLIP_FULL }}>
-        <GrassSkyScene view={cameraView.current} />
+        <GrassSkyScene view={cameraView.current} butterflyColor={BUTTERFLY_COLORS[butterflyIdx]} />
       </div>
 
       <div className="pointer-events-none absolute inset-0 z-10">
@@ -91,6 +108,29 @@ function App() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div
+          ref={desktopRef}
+          style={{ opacity: 0 }}
+          className={`absolute bottom-6 left-16 ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        >
+          <button
+            onClick={() => setButterflyIdx((i) => (i + 1) % BUTTERFLY_COLORS.length)}
+            className="flex cursor-pointer flex-col items-center gap-2 transition-transform duration-150 active:scale-[0.92]"
+          >
+            <div className="relative flex h-14 w-12 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg bg-gradient-to-b from-white to-[#f6e9d8] shadow-[0_2px_6px_rgba(0,0,0,0.18)]">
+              <span className="absolute top-0 right-0 h-3.5 w-3.5 rounded-bl-md bg-white shadow-[-1px_1px_1px_rgba(0,0,0,0.08)]" />
+              <span className="mt-1 flex items-end gap-1">
+                <i className="h-3 w-3 rounded-full bg-[#ff7b4a]" />
+                <i className="h-1.5 w-1.5 rounded-full bg-[#d62828]" />
+              </span>
+              <i className="h-2 w-2 rounded-full bg-[#ffb703]" />
+            </div>
+            <span className="rounded-full bg-[#3d4a2a]/80 px-3 py-0.5 font-sans text-[11px] font-bold text-white backdrop-blur-sm">
+              Butterflies
+            </span>
+          </button>
         </div>
 
         <nav
@@ -165,7 +205,7 @@ function App() {
             >
               <span
                 onClick={handleEnter}
-                className="cursor-pointer"
+                className="cursor-pointer transition-opacity hover:opacity-60"
                 style={{
                   fontFamily: "'Instrument Serif', serif",
                   fontWeight: 200,
@@ -189,7 +229,8 @@ function App() {
                 }}
               />
               <span
-                className="cursor-pointer font-sans"
+                onClick={handleEnter}
+                className="cursor-pointer font-sans transition-opacity hover:opacity-60"
                 style={{ fontSize: '12px', fontWeight: 400, lineHeight: 1.05, textAlign: 'center' }}
               >
                 Enter site
@@ -214,7 +255,7 @@ function App() {
 
       <div
         ref={taglineRef}
-        className="pointer-events-none absolute right-8 bottom-6 z-20 flex flex-col items-start text-left text-3xl text-white/95 uppercase md:right-12 md:text-4xl"
+        className="pointer-events-none absolute right-8 bottom-8 z-20 flex flex-col items-start text-left text-3xl text-white/95 uppercase md:text-4xl"
         style={{
           fontFamily: "'Instrument Serif', serif",
           fontWeight: 400,

@@ -480,13 +480,20 @@ const butterflyVertexShader = /* glsl */ `
 
 const butterflyFragmentShader = /* glsl */ `
   uniform sampler2D uMap;
+  uniform vec3 uButterflyColor;
   varying vec2 vUv;
   #include <fog_pars_fragment>
 
   void main() {
     vec4 c = texture2D(uMap, vUv);
     if (c.a < 0.35) discard;
-    gl_FragColor = vec4(c.rgb * 0.92, 1.0);
+    // wing fill is the only saturated part of the texture (ink is near-black, spots white), so saturation is the recolor mask;
+    // 0.65 = linear red of the painted fill, keeps its shading
+    float mx = max(c.r, max(c.g, c.b));
+    float sat = (mx - min(c.r, min(c.g, c.b))) / max(mx, 1e-4);
+    vec3 tint = uButterflyColor * clamp(c.r / 0.65, 0.0, 1.1);
+    vec3 col = mix(c.rgb, tint, smoothstep(0.55, 0.8, sat));
+    gl_FragColor = vec4(col * 0.92, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
     #include <fog_fragment>
@@ -604,7 +611,7 @@ function buildButterflies() {
   const material = new THREE.ShaderMaterial({
     vertexShader: butterflyVertexShader,
     fragmentShader: butterflyFragmentShader,
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uMap: { value: null } }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uMap: { value: null }, uButterflyColor: { value: new THREE.Color('#e63946') } }]),
     side: THREE.DoubleSide,
     fog: true,
   })
@@ -615,8 +622,9 @@ function buildButterflies() {
   const dummy = new THREE.Object3D()
   dummy.rotation.order = 'YXZ'
 
-  const update = (t: number) => {
+  const update = (t: number, color: THREE.Color) => {
     material.uniforms.uTime.value = t
+    material.uniforms.uButterflyColor.value.lerp(color, 0.08)
     for (let i = 0; i < BUTTERFLY_COUNT; i++) {
       const f = flights[i]
       const ax = t * f.sx + f.p1
@@ -642,8 +650,12 @@ function buildButterflies() {
   return { mesh, update, dispose }
 }
 
-export default function GrassSkyScene({ view }: { view: CameraView }) {
+export default function GrassSkyScene({ view, butterflyColor }: { view: CameraView; butterflyColor: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const butterflyTarget = useRef(new THREE.Color(butterflyColor))
+  useEffect(() => {
+    butterflyTarget.current.set(butterflyColor)
+  }, [butterflyColor])
 
   useEffect(() => {
     const container = containerRef.current
@@ -750,7 +762,7 @@ export default function GrassSkyScene({ view }: { view: CameraView }) {
       camera.lookAt(lookTarget)
       sky.position.copy(camera.position)
 
-      butterflies.update(t)
+      butterflies.update(t, butterflyTarget.current)
 
       renderer.clear()
       renderer.render(scene, camera)
