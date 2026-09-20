@@ -6,7 +6,7 @@ export const PAN_DURATION = 3.0
 // Camera state tweened from App's ENTER timeline. `shift` is how far below its resting place the horizon
 // sits, in frame heights: 1 = one full screen below (Phase 1, only sky), 0 = resting ~70% down (Phase 2).
 // Pitch is derived from it each frame, so the sky moves exactly 100vh — locked to the DOM overlay's -100vh slide.
-export type CameraView = { shift: number; clouds: number }
+export type CameraView = { shift: number; clouds: number; throttled: boolean }
 const FOV = 55
 const TAN_HALF_FOV = Math.tan(THREE.MathUtils.degToRad(FOV / 2))
 const REST_HORIZON = 0.704
@@ -747,6 +747,7 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
 
     const clock = new THREE.Clock()
     let raf: number
+    let frame = 0
     const animate = () => {
       const t = clock.getElapsedTime()
       skyMaterial.uniforms.uTime.value = t
@@ -764,9 +765,12 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
 
       butterflies.update(t, butterflyTarget.current)
 
-      renderer.clear()
-      renderer.render(scene, camera)
-      renderer.render(grainScene, grainCamera)
+      // while the UI slides, draw every other frame: the scene keeps moving (30fps) but leaves the GPU room for the compositor
+      if (!view.throttled || frame++ % 2 === 0) {
+        renderer.clear()
+        renderer.render(scene, camera)
+        renderer.render(grainScene, grainCamera)
+      }
       raf = requestAnimationFrame(animate)
     }
     animate()
