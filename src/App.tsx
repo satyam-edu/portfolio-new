@@ -304,13 +304,15 @@ function App() {
               {openPanel === 'work' ? (
                 <>
                   <section className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
-                    <span className="text-[11px] font-semibold tracking-widest text-neutral-500 uppercase">Selected Work Experience</span>
-                    <h2 className="mt-2 text-[15px] leading-snug font-semibold text-neutral-900">
-                      Production engineering across full stack web applications and client platforms.
+                    <span className="font-mono text-[10px] font-semibold tracking-widest text-neutral-400 uppercase">
+                      Engineering Bench // Runtime Logs
+                    </span>
+                    <h2 className="mt-2 mb-1.5 text-[13px] leading-snug font-bold tracking-tight text-neutral-900">
+                      Building software from bare data models to tactile user interfaces.
                     </h2>
-                    <p className="mt-2 text-[12px] leading-normal font-normal text-neutral-500">
-                      Built with React, Next.js, Node.js, and PostgreSQL, from responsive interfaces to REST APIs and role based
-                      backend systems.
+                    <p className="hyphens-none text-[11.5px] leading-relaxed font-normal text-neutral-500">
+                      Production systems engineered across the full stack, architecting backend services, relational
+                      databases, and fluid interactive frontend systems that feel alive.
                     </p>
                   </section>
 
