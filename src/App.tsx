@@ -3,6 +3,9 @@ import gsap from 'gsap'
 import GrassSkyScene, { PAN_DURATION, type CameraView } from './GrassSkyScene'
 
 const LOAD_MS = 900
+const AUDIO_START_SECONDS = 3 * 60
+const AUDIO_VOLUME = 0.6
+const AUDIO_FADE_IN = 1.5
 const RAIL_W = 44
 const BUTTERFLY_COLORS = ['#e63946', '#ff7b00', '#ffd166', '#80ed99', '#06d6a0', '#00b4d8', '#4361ee', '#b5179e', '#ff5d8f', '#f8f9fa']
 // expanded panel width in px, mirrors the CSS clamp on the sidebar
@@ -14,7 +17,7 @@ function App() {
   const taglineRef = useRef<HTMLDivElement>(null)
   const heroRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<HTMLDivElement>(null)
-  const [openPanel, setOpenPanel] = useState<'work' | 'projects' | 'contact' | null>(null)
+  const [openPanel, setOpenPanel] = useState<'skills' | 'work' | 'projects' | 'contact' | null>(null)
   const isOpen = openPanel !== null
   const drawerRef = useRef<HTMLElement>(null)
   const tlRef = useRef<gsap.core.Timeline | null>(null)
@@ -38,7 +41,7 @@ function App() {
   useEffect(() => {
     const audio = new Audio('/audio/29-MOTION.mp3')
     audio.loop = true
-    audio.volume = 0.6
+    audio.volume = 0 // starts silent; fadeInAudio() brings it up to AUDIO_VOLUME on play
     audioRef.current = audio
     return () => {
       audio.pause()
@@ -52,13 +55,13 @@ function App() {
     eqTweenRef.current?.kill()
     eqTweenRef.current = isPlaying
       ? gsap.to(bars, {
-          scaleY: () => gsap.utils.random(0.5, 1.4),
-          duration: () => gsap.utils.random(0.3, 0.6),
-          repeat: -1,
-          yoyo: true,
-          ease: 'sine.inOut',
-          stagger: { each: 0.12, from: 'random' },
-        })
+        scaleY: () => gsap.utils.random(0.5, 1.4),
+        duration: () => gsap.utils.random(0.3, 0.6),
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut',
+        stagger: { each: 0.12, from: 'random' },
+      })
       : gsap.to(bars, { scaleY: 0.35, duration: 0.3, ease: 'power2.out', overwrite: 'auto' })
     return () => {
       eqTweenRef.current?.kill()
@@ -112,18 +115,30 @@ function App() {
     tl.fromTo(navRef.current, { x: -(w + RAIL_W), opacity: 0 }, { x: -w, opacity: 1, ...enter }, settle)
     tl.to(desktopRef.current, { opacity: 1, ...enter }, settle)
     tl.to(topRef.current, { y: 0, opacity: 1, ...enter }, settle)
+    return tl
+  }
+
+  // silences the element, starts it, then tweens its volume up — so every play path fades in the same way
+  const fadeInAudio = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    gsap.killTweensOf(audio)
+    audio.volume = 0
+    audio
+      .play()
+      .then(() => {
+        setIsPlaying(true)
+        gsap.to(audio, { volume: AUDIO_VOLUME, duration: AUDIO_FADE_IN, ease: 'power1.out' })
+      })
+      .catch((err) => console.warn('Playback blocked:', err))
   }
 
   const handleEnterWithAudio = () => {
     if (progress < 100 || entered) return
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0
-      audioRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch((err) => console.warn('Autoplay blocked:', err))
-    }
-    triggerEnterTransition()
+    if (audioRef.current) audioRef.current.currentTime = AUDIO_START_SECONDS
+    const tl = triggerEnterTransition()
+    // wait until the camera pan finishes and the main scene has fully settled in before the track fades up
+    tl.call(fadeInAudio, [], PAN_DURATION)
   }
 
   const handleEnterWithoutAudio = () => {
@@ -136,13 +151,11 @@ function App() {
   const toggleAudio = () => {
     if (!audioRef.current) return
     if (isPlaying) {
+      gsap.killTweensOf(audioRef.current)
       audioRef.current.pause()
       setIsPlaying(false)
     } else {
-      audioRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch((err) => console.warn('Playback blocked:', err))
+      fadeInAudio()
     }
   }
 
@@ -301,7 +314,61 @@ function App() {
             className={`absolute inset-y-0 left-0 w-[clamp(440px,37vw,520px)] overflow-y-auto font-sans text-neutral-900 hyphens-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
           >
             <div className="flex min-h-full flex-col gap-3 p-4">
-              {openPanel === 'work' ? (
+              {openPanel === 'skills' ? (
+                <>
+                  <section className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
+                    <span className="font-mono text-[10px] font-semibold tracking-widest text-neutral-400 uppercase">
+                      Stack &amp; Tooling // Arsenal
+                    </span>
+                    <h2 className="mt-2 mb-1.5 text-[13px] leading-snug font-bold tracking-tight text-neutral-900">
+                      Technologies, runtime environments, and tools I use to build scalable software.
+                    </h2>
+                    <p className="text-[11.5px] leading-relaxed font-normal text-neutral-500">
+                      Focused on modern full stack architectures, performance optimization, and expressive web
+                      interfaces.
+                    </p>
+                  </section>
+
+                  {[
+                    {
+                      label: 'Frontend & UI',
+                      desc: 'Crafting responsive component architectures, state workflows, and tactile visual systems.',
+                      pills: ['React.js', 'Next.js', 'TypeScript', 'JavaScript', 'Tailwind CSS', 'HTML5', 'CSS3'],
+                    },
+                    {
+                      label: 'Backend & Runtimes',
+                      desc: 'Building scalable APIs, authentication flows, and server side data models.',
+                      pills: ['Node.js', 'Express.js', 'REST APIs', 'JWT Auth', 'Role Based Access Control (RBAC)'],
+                    },
+                    {
+                      label: 'Databases & Persistence',
+                      desc: 'Designing relational schemas, writing optimized SQL queries, and managing cloud stores.',
+                      pills: ['PostgreSQL', 'MySQL', 'Supabase', 'Prisma ORM'],
+                    },
+                    {
+                      label: 'Languages & CS Fundamentals',
+                      desc: 'Algorithmic problem solving, data structures, and typed programming.',
+                      pills: ['C++', 'TypeScript', 'JavaScript', 'Python', 'SQL', 'Data Structures & Algorithms'],
+                    },
+                    {
+                      label: 'Tools & Deployment',
+                      pills: ['Git', 'GitHub', 'Postman', 'Figma'],
+                    },
+                  ].map(({ label, desc, pills }) => (
+                    <section key={label} className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
+                      <span className="text-[10px] font-semibold tracking-wider text-neutral-400 uppercase">{label}</span>
+                      {desc && <p className="mt-1.5 text-[11.5px] leading-relaxed font-normal text-neutral-500">{desc}</p>}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {pills.map((skill) => (
+                          <span key={skill} className="rounded-full bg-neutral-200/70 px-2.5 py-1 text-[11px] font-medium tracking-tight text-neutral-800">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </>
+              ) : openPanel === 'work' ? (
                 <>
                   <section className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
                     <span className="font-mono text-[10px] font-semibold tracking-widest text-neutral-400 uppercase">
@@ -370,162 +437,222 @@ function App() {
                 </>
               ) : openPanel === 'projects' ? (
                 <>
-                  <section className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
-                    <h2 className="mb-4 text-[13px] leading-snug font-semibold text-neutral-900">Featured Projects</h2>
-                    {[
-                      {
-                        name: 'UniTrack — AI Powered Attendance Tracking PWA',
-                        points: [
-                          'Progressive Web App with 13+ screens for attendance workflows, featuring optimistic UI updates, automated tracking, and accessible layouts.',
-                        ],
-                        stack: 'Next.js, React, TypeScript, Supabase, PostgreSQL, Tailwind CSS, Google Gemini',
-                      },
-                      {
-                        name: 'TripMate — Travel Companion Platform',
-                        points: [
-                          'Responsive travel platform with intuitive user flows for trip discovery, host dashboards, and scalable backend management.',
-                        ],
-                        stack: 'React, TypeScript, Node.js, Express.js, Prisma ORM, PostgreSQL',
-                      },
-                    ].map((proj, i) => (
-                      <div key={proj.name} className={i > 0 ? 'mt-5 border-t border-neutral-200 pt-5' : ''}>
-                        <h3 className="text-[12px] leading-snug font-semibold text-neutral-900">{proj.name}</h3>
-                        <ul className="mt-1.5 list-disc space-y-1 pl-4">
-                          {proj.points.map((pt) => (
-                            <li key={pt} className="text-[11.5px] leading-normal font-normal text-neutral-500">
-                              {pt}
-                            </li>
-                          ))}
-                        </ul>
-                        <p className="mt-1.5 text-[11px] leading-normal font-medium text-neutral-400">Stack: {proj.stack}</p>
-                      </div>
-                    ))}
-                  </section>
+                  {[
+                    {
+                      category: 'Full Stack Apps',
+                      projects: [
+                        {
+                          name: 'UniTrack - AI Powered Attendance Tracking PWA',
+                          liveUrl: 'https://www.unitrack.dev',
+                          repo: 'https://github.com/satyam-edu/UniTrack',
+                          desc: 'Responsive Progressive Web App featuring 13+ screens for subject wise attendance management, automated criteria, optimistic UI updates, and AI assisted timetable insights.',
+                          stack: ['Next.js', 'React', 'TypeScript', 'Supabase', 'PostgreSQL', 'Tailwind CSS', 'Google Gemini'],
+                        },
+                        {
+                          name: 'TripMate - Travel Companion Platform',
+                          liveUrl: 'https://tripmate-gamma-two.vercel.app/',
+                          repo: 'https://github.com/satyam-edu/TripMate',
+                          desc: 'Responsive travel platform designed with intuitive journeys for trip discovery, user authentication, host dashboards, and trip management.',
+                          stack: ['React', 'TypeScript', 'Node.js', 'Express.js', 'Prisma ORM', 'PostgreSQL'],
+                        },
+                      ],
+                    },
+                    {
+                      category: 'Client Builds',
+                      projects: [
+                        {
+                          name: 'Hotel Kamala Inn Grand',
+                          liveUrl: 'https://kamalainngrand.com',
+                          repo: 'https://github.com/satyam-edu/Hotel-Management-Website',
+                          desc: 'Production hotel booking platform and staff admin dashboard handling room reservations, dynamic inventory, guest inquiries, and role based staff administration.',
+                          stack: ['React', 'TypeScript', 'Supabase Auth', 'PostgreSQL', 'Tailwind CSS'],
+                        },
+                      ],
+                    },
+                    {
+                      category: 'UI & Interfaces',
+                      projects: [
+                        {
+                          name: 'Youth Global HQ',
+                          liveUrl: 'https://youth-global-hq.vercel.app/',
+                          repo: 'https://github.com/satyam-edu/Youth-Global-HQ',
+                          desc: 'Interactive community and organizational hub built with clean responsive layouts, accessible navigation, and engaging UI components.',
+                          stack: ['React', 'JavaScript', 'Tailwind CSS'],
+                        },
+                        {
+                          name: 'Pasco Foods',
+                          liveUrl: 'https://pasco-foods-sigma.vercel.app/',
+                          repo: 'https://github.com/satyam-edu/Pasco-Foods',
+                          desc: 'Clean brand and product showcase interface focused on rich visual storytelling, responsive typography, and tactile micro interactions.',
+                          stack: ['React', 'Tailwind CSS', 'Framer Motion'],
+                        },
+                      ],
+                    },
+                  ].map(({ category, projects }) => (
+                    <section key={category} className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
+                      <span className="mb-3 block text-[10px] font-semibold tracking-wider text-neutral-400 uppercase">{category}</span>
+                      {projects.map((proj, i) => (
+                        <div key={proj.name} className={i > 0 ? 'mt-5 border-t border-neutral-200 pt-5' : ''}>
+                          <h3 className="text-[12px] leading-snug font-semibold text-neutral-900">{proj.name}</h3>
+                          <p className="mt-1.5 hyphens-none text-[11.5px] leading-normal font-normal text-neutral-500">{proj.desc}</p>
+                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                            {proj.stack.map((tech) => (
+                              <span key={tech} className="rounded-full bg-neutral-200/70 px-2.5 py-1 text-[10px] font-medium text-neutral-700">
+                                {tech}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="mt-3 flex items-center gap-2">
+                            <a
+                              href={proj.liveUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-neutral-800"
+                            >
+                              <span>View Live</span>
+                              <span className="text-[10px]">↗</span>
+                            </a>
+                            <a
+                              href={proj.repo}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label="View source on GitHub"
+                              className="inline-flex items-center justify-center rounded-lg border border-neutral-300 p-1.5 text-neutral-700 transition-colors hover:border-neutral-400 hover:text-neutral-900"
+                            >
+                              <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                                <path d="M12 .5C5.73.5.5 5.73.5 12c0 5.02 3.29 9.28 7.86 10.78.57.1.79-.25.79-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.18 1.18a11.1 11.1 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.24 2.77.12 3.06.74.8 1.18 1.83 1.18 3.09 0 4.43-2.69 5.41-5.26 5.69.42.36.78 1.07.78 2.16 0 1.56-.01 2.82-.01 3.2 0 .3.21.66.8.55C20.21 21.27 23.5 17.01 23.5 12 23.5 5.73 18.27.5 12 .5z" />
+                              </svg>
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </section>
+                  ))}
                 </>
               ) : (
                 <>
-              <div className="drawer-card-item will-change-[transform,opacity] relative flex aspect-[5/4] flex-col items-center overflow-hidden rounded-2xl bg-[#f4f4f5] pt-7">
-                {/* line-art meadow behind the plate, echoing the grass & butterflies scene */}
-                <svg aria-hidden className="absolute inset-0 h-full w-full" viewBox="0 0 400 320" preserveAspectRatio="none" fill="none" strokeLinecap="round" strokeLinejoin="round">
-                  <g stroke="#b9d3ad" strokeWidth="1.5">
-                    <path d="M-5 70c20 0 28-18 42-14 10 3 8 16 20 14" />
-                    <path d="M50 12c-4 14-16 18-26 16" />
-                    <path d="M150 54c8-14 26-16 36-6 6-10 22-8 26 4" />
-                    <path d="M345 50c6-16 28-18 38-4 6-6 16-4 22 4" />
-                    <path d="M-5 225c22-14 50-12 64 6" />
-                    <path d="M10 250c14-8 34-10 48 0" />
-                    <path d="M340 310c-2-40 20-60 60-66" />
-                    <path d="M150 320c18-24 60-30 94-14 14-10 36-8 48 4" />
-                  </g>
-                  <g stroke="#c7c3e6" strokeWidth="1.5">
-                    <path d="M308 72v14M301 79h14" />
-                    <path d="M322 92v8M318 96h8" />
-                  </g>
-                  <symbol id="drawer-bfly" viewBox="-10 -10 20 20" overflow="visible">
-                    <ellipse cx="-3.2" cy="-2" rx="3.4" ry="4.6" transform="rotate(-25 -3.2 -2)" fill="#ede7f7" stroke="#c9b7e0" strokeWidth="1.3" />
-                    <ellipse cx="3.2" cy="-2" rx="3.4" ry="4.6" transform="rotate(25 3.2 -2)" fill="#ede7f7" stroke="#c9b7e0" strokeWidth="1.3" />
-                    <ellipse cx="0" cy="4" rx="2.6" ry="3.2" fill="#e7b8c6" />
-                  </symbol>
-                  <use href="#drawer-bfly" x="163" y="60" width="20" height="20" transform="rotate(12 173 70)" />
-                  <use href="#drawer-bfly" x="52" y="138" width="17" height="17" transform="rotate(-10 60 146)" />
-                  <use href="#drawer-bfly" x="340" y="168" width="17" height="17" transform="rotate(18 348 176)" />
-                  <use href="#drawer-bfly" x="284" y="228" width="17" height="17" transform="rotate(-14 292 236)" />
-                  <g stroke="#b8b4dc" strokeWidth="1.5">
-                    <path d="M216 312c2-22 2-36 12-50" />
-                    <path d="M198 312c-2-14 0-24 -6-34" />
-                  </g>
-                  <g stroke="#c07a92" strokeWidth="1.3" fill="#e9a9bd">
-                    <path d="M228 248a6 6 0 1 1 8 6 6 6 0 1 1-4 9 6 6 0 1 1-9-2 6 6 0 1 1-2-9 6 6 0 1 1 7-4z" />
-                    <path d="M190 270a5 5 0 1 1 7 5 5 5 0 1 1-4 8 5 5 0 1 1-8-2 5 5 0 1 1-1-8 5 5 0 1 1 6-3z" />
-                  </g>
-                </svg>
+                  <div className="drawer-card-item will-change-[transform,opacity] relative flex aspect-[5/4] flex-col items-center overflow-hidden rounded-2xl bg-[#f4f4f5] pt-7">
+                    {/* line-art meadow behind the plate, echoing the grass & butterflies scene */}
+                    <svg aria-hidden className="absolute inset-0 h-full w-full" viewBox="0 0 400 320" preserveAspectRatio="none" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                      <g stroke="#b9d3ad" strokeWidth="1.5">
+                        <path d="M-5 70c20 0 28-18 42-14 10 3 8 16 20 14" />
+                        <path d="M50 12c-4 14-16 18-26 16" />
+                        <path d="M150 54c8-14 26-16 36-6 6-10 22-8 26 4" />
+                        <path d="M345 50c6-16 28-18 38-4 6-6 16-4 22 4" />
+                        <path d="M-5 225c22-14 50-12 64 6" />
+                        <path d="M10 250c14-8 34-10 48 0" />
+                        <path d="M340 310c-2-40 20-60 60-66" />
+                        <path d="M150 320c18-24 60-30 94-14 14-10 36-8 48 4" />
+                      </g>
+                      <g stroke="#c7c3e6" strokeWidth="1.5">
+                        <path d="M308 72v14M301 79h14" />
+                        <path d="M322 92v8M318 96h8" />
+                      </g>
+                      <symbol id="drawer-bfly" viewBox="-10 -10 20 20" overflow="visible">
+                        <ellipse cx="-3.2" cy="-2" rx="3.4" ry="4.6" transform="rotate(-25 -3.2 -2)" fill="#ede7f7" stroke="#c9b7e0" strokeWidth="1.3" />
+                        <ellipse cx="3.2" cy="-2" rx="3.4" ry="4.6" transform="rotate(25 3.2 -2)" fill="#ede7f7" stroke="#c9b7e0" strokeWidth="1.3" />
+                        <ellipse cx="0" cy="4" rx="2.6" ry="3.2" fill="#e7b8c6" />
+                      </symbol>
+                      <use href="#drawer-bfly" x="163" y="60" width="20" height="20" transform="rotate(12 173 70)" />
+                      <use href="#drawer-bfly" x="52" y="138" width="17" height="17" transform="rotate(-10 60 146)" />
+                      <use href="#drawer-bfly" x="340" y="168" width="17" height="17" transform="rotate(18 348 176)" />
+                      <use href="#drawer-bfly" x="284" y="228" width="17" height="17" transform="rotate(-14 292 236)" />
+                      <g stroke="#b8b4dc" strokeWidth="1.5">
+                        <path d="M216 312c2-22 2-36 12-50" />
+                        <path d="M198 312c-2-14 0-24 -6-34" />
+                      </g>
+                      <g stroke="#c07a92" strokeWidth="1.3" fill="#e9a9bd">
+                        <path d="M228 248a6 6 0 1 1 8 6 6 6 0 1 1-4 9 6 6 0 1 1-9-2 6 6 0 1 1-2-9 6 6 0 1 1 7-4z" />
+                        <path d="M190 270a5 5 0 1 1 7 5 5 5 0 1 1-4 8 5 5 0 1 1-8-2 5 5 0 1 1-1-8 5 5 0 1 1 6-3z" />
+                      </g>
+                    </svg>
 
-                <span className="relative text-[13px] font-medium text-neutral-800">Available for Opportunities</span>
+                    <span className="relative text-[13px] font-medium text-neutral-800">Available for Opportunities</span>
 
-                <div className="relative my-auto w-[min(76%,300px)] -rotate-[8deg] rounded-xl border border-neutral-300 bg-white p-1.5 shadow-[0_2px_6px_rgba(0,0,0,0.06)]">
-                  <div className="relative flex flex-col items-center rounded-lg border-2 border-[#d9d7ec] px-4 pt-3 pb-2.5 text-center">
-                    <span aria-hidden className="absolute top-2 left-[30%] h-1.5 w-2.5 rounded-full bg-neutral-200" />
-                    <span aria-hidden className="absolute top-2 right-[30%] h-1.5 w-2.5 rounded-full bg-neutral-200" />
-                    <span className="mt-1.5 text-[11px] font-semibold tracking-wide text-neutral-500">SATYAM SHARMA</span>
-                    <span className="flex items-center gap-1 text-[clamp(2rem,3.4vw,2.6rem)] leading-none font-black tracking-tight text-[#c5c2e8]">
-                      S:S
-                      <svg aria-hidden className="h-[0.8em] w-[0.8em]" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="12" fill="currentColor" />
-                        <circle cx="8.5" cy="10" r="1.6" fill="#fff" />
-                        <circle cx="15.5" cy="10" r="1.6" fill="#fff" />
-                        <path d="M7.5 14.5c1.2 1.8 2.8 2.6 4.5 2.6s3.3-.8 4.5-2.6" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
-                      2026
-                    </span>
-                    <span className="mt-1.5 flex items-center gap-2 text-[11px] font-semibold tracking-wide text-neutral-500">
-                      <i className="h-px w-3 bg-neutral-300" />
-                      #MAKETHEWEBFUNAGAIN
-                      <i className="h-px w-3 bg-neutral-300" />
-                    </span>
+                    <div className="relative my-auto w-[min(76%,300px)] -rotate-[8deg] rounded-xl border border-neutral-300 bg-white p-1.5 shadow-[0_2px_6px_rgba(0,0,0,0.06)]">
+                      <div className="relative flex flex-col items-center rounded-lg border-2 border-[#d9d7ec] px-4 pt-3 pb-2.5 text-center">
+                        <span aria-hidden className="absolute top-2 left-[30%] h-1.5 w-2.5 rounded-full bg-neutral-200" />
+                        <span aria-hidden className="absolute top-2 right-[30%] h-1.5 w-2.5 rounded-full bg-neutral-200" />
+                        <span className="mt-1.5 text-[11px] font-semibold tracking-wide text-neutral-500">SATYAM SHARMA</span>
+                        <span className="flex items-center gap-1 text-[clamp(2rem,3.4vw,2.6rem)] leading-none font-black tracking-tight text-[#c5c2e8]">
+                          S:S
+                          <svg aria-hidden className="h-[0.8em] w-[0.8em]" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="12" fill="currentColor" />
+                            <circle cx="8.5" cy="10" r="1.6" fill="#fff" />
+                            <circle cx="15.5" cy="10" r="1.6" fill="#fff" />
+                            <path d="M7.5 14.5c1.2 1.8 2.8 2.6 4.5 2.6s3.3-.8 4.5-2.6" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+                          </svg>
+                          2026
+                        </span>
+                        <span className="mt-1.5 flex items-center gap-2 text-[11px] font-semibold tracking-wide text-neutral-500">
+                          <i className="h-px w-3 bg-neutral-300" />
+                          #MAKETHEWEBFUNAGAIN
+                          <i className="h-px w-3 bg-neutral-300" />
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <section className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
-                <h2 className="mb-1 text-[13px] leading-snug font-semibold text-neutral-900">Contact Me</h2>
-                <p className="text-[12px] leading-normal font-normal text-neutral-500">
-                  For enquiries, reach out directly at{' '}
-                  <a className="underline underline-offset-2" href="mailto:satyamsharma.main@gmail.com">
-                    satyamsharma.main@gmail.com
-                  </a>
-                  .
-                </p>
-                <p className="mt-3 text-[12px] leading-normal font-normal text-neutral-500">
-                  Feel free to reach out for software engineering roles, full stack projects, or frontend collaborations.
-                </p>
-              </section>
+                  <section className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
+                    <h2 className="mb-1 text-[13px] leading-snug font-semibold text-neutral-900">Contact Me</h2>
+                    <p className="text-[12px] leading-normal font-normal text-neutral-500">
+                      For enquiries, reach out directly at{' '}
+                      <a className="underline underline-offset-2" href="mailto:satyamsharma.main@gmail.com">
+                        satyamsharma.main@gmail.com
+                      </a>
+                      .
+                    </p>
+                    <p className="mt-3 text-[12px] leading-normal font-normal text-neutral-500">
+                      Feel free to reach out for software engineering roles, full stack projects, or frontend collaborations.
+                    </p>
+                  </section>
 
-              <section className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
-                <h2 className="mb-3 text-[13px] leading-snug font-semibold tracking-tight text-neutral-900">Frequently Asked Questions</h2>
-                {[
-                  [
-                    'What type of work do you like to do?',
-                    [
-                      'I focus on building full stack web applications and interactive web experiences. Most of my work revolves around React, Next.js, and TypeScript on the frontend, alongside robust backend services using Node.js, Express, and PostgreSQL.',
-                      'I also enjoy creative development, building dynamic 3D web environments with React Three Fiber, GLSL shaders, and tactile UI animations that make the web memorable.',
-                    ],
-                  ],
-                  [
-                    'What is your background?',
-                    [
-                      'I am pursuing a Bachelor of Technology in Computer Science and Engineering at USICT, New Delhi (2023 to 2027).',
-                      'Alongside academics, I have worked as a Frontend Developer Intern at CoinFerenceX, built production booking platforms as a freelance developer, and created full stack products at URLyte.',
-                    ],
-                  ],
-                  [
-                    'What are your core technical strengths?',
-                    [
-                      'My core stack includes React, Next.js, TypeScript, Tailwind CSS, PostgreSQL, and Node.js. I am comfortable working with REST APIs, JWT authentication, database query optimization, and UI performance.',
-                      'I also actively practice Data Structures and Algorithms in C++ and stay focused on clean, modular component architecture.',
-                    ],
-                  ],
-                  [
-                    'What is your development process like?',
-                    [
-                      'I typically break work down into clear stages: understanding the product scope and architecture, building responsive components with crisp user interactions, and wiring up scalable APIs and database schemas.',
-                      'I prioritize smooth state management, clean developer workflows with Git, and shipping production ready interfaces that feel responsive across all screen sizes.',
-                    ],
-                  ],
-                  [
-                    'Are you open to internships or full time roles?',
-                    ['Yes, I am actively open to frontend, backend, or full stack software engineering opportunities, internships, and select freelance builds.'],
-                  ],
-                ].map(([q, paragraphs]) => (
-                  <div key={q as string} className="mt-4 first-of-type:mt-0">
-                    <h3 className="mb-1.5 text-[12px] leading-snug font-semibold text-neutral-900">{q as string}</h3>
-                    {(paragraphs as string[]).map((p, i) => (
-                      <p key={i} className="mb-2.5 text-[11.5px] leading-normal font-normal text-neutral-500 last:mb-0">
-                        {p}
-                      </p>
+                  <section className="drawer-card-item will-change-[transform,opacity] rounded-2xl bg-[#f4f4f5] p-5">
+                    <h2 className="mb-3 text-[13px] leading-snug font-semibold tracking-tight text-neutral-900">Frequently Asked Questions</h2>
+                    {[
+                      [
+                        'What type of work do you like to do?',
+                        [
+                          'I focus on building full stack web applications and interactive web experiences. Most of my work revolves around React, Next.js, and TypeScript on the frontend, alongside robust backend services using Node.js, Express, and PostgreSQL.',
+                          'I also enjoy creative development, building dynamic 3D web environments with React Three Fiber, GLSL shaders, and tactile UI animations that make the web memorable.',
+                        ],
+                      ],
+                      [
+                        'What is your background?',
+                        [
+                          'I am pursuing a Bachelor of Technology in Computer Science and Engineering at USICT, New Delhi (2023 to 2027).',
+                          'Alongside academics, I have worked as a Frontend Developer Intern at CoinFerenceX, built production booking platforms as a freelance developer, and created full stack products at URLyte.',
+                        ],
+                      ],
+                      [
+                        'What are your core technical strengths?',
+                        [
+                          'My core stack includes React, Next.js, TypeScript, Tailwind CSS, PostgreSQL, and Node.js. I am comfortable working with REST APIs, JWT authentication, database query optimization, and UI performance.',
+                          'I also actively practice Data Structures and Algorithms in C++ and stay focused on clean, modular component architecture.',
+                        ],
+                      ],
+                      [
+                        'What is your development process like?',
+                        [
+                          'I typically break work down into clear stages: understanding the product scope and architecture, building responsive components with crisp user interactions, and wiring up scalable APIs and database schemas.',
+                          'I prioritize smooth state management, clean developer workflows with Git, and shipping production ready interfaces that feel responsive across all screen sizes.',
+                        ],
+                      ],
+                      [
+                        'Are you open to internships or full time roles?',
+                        ['Yes, I am actively open to frontend, backend, or full stack software engineering opportunities, internships, and select freelance builds.'],
+                      ],
+                    ].map(([q, paragraphs]) => (
+                      <div key={q as string} className="mt-4 first-of-type:mt-0">
+                        <h3 className="mb-1.5 text-[12px] leading-snug font-semibold text-neutral-900">{q as string}</h3>
+                        {(paragraphs as string[]).map((p, i) => (
+                          <p key={i} className="mb-2.5 text-[11.5px] leading-normal font-normal text-neutral-500 last:mb-0">
+                            {p}
+                          </p>
+                        ))}
+                      </div>
                     ))}
-                  </div>
-                ))}
-              </section>
+                  </section>
                 </>
               )}
 
@@ -593,7 +720,7 @@ function App() {
                     onClick={(e) => {
                       e.stopPropagation()
                       const key = label.toLowerCase()
-                      if (key === 'work' || key === 'projects' || key === 'contact') setOpenPanel((p) => (p === key ? null : key))
+                      if (key === 'skills' || key === 'work' || key === 'projects' || key === 'contact') setOpenPanel((p) => (p === key ? null : key))
                     }}
                     className={`group relative mx-auto cursor-pointer flex w-[26px] items-center justify-center px-0.5 py-2.5 font-sans text-[11px] font-bold tracking-[0.1em] text-neutral-900 uppercase ${h}`}
                   >

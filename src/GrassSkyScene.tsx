@@ -307,7 +307,7 @@ const groundFragmentShader = /* glsl */ `
   }
 `
 
-const grainVertexShader = /* glsl */ `
+const vignetteVertexShader = /* glsl */ `
   varying vec2 vNdc;
   void main() {
     vNdc = position.xy;
@@ -315,22 +315,12 @@ const grainVertexShader = /* glsl */ `
   }
 `
 
-const grainFragmentShader = /* glsl */ `
-  uniform float uTime;
+const vignetteFragmentShader = /* glsl */ `
   varying vec2 vNdc;
-  float hash(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-  }
   void main() {
-    // signed grain: light or dark speckle weighted by distance from mid, so it doesn't wash colors toward gray
-    float g = hash(gl_FragCoord.xy + floor(uTime * 24.0) * 37.0);
-    float grainAlpha = abs(g - 0.5) * 0.3;
-    // gentle lens vignette: blends toward black at the corners, composited in the same pass as the grain
-    float vignette = smoothstep(0.55, 1.45, length(vNdc * vec2(1.0, 0.9))) * 0.22;
-    float alpha = grainAlpha + vignette * (1.0 - grainAlpha);
-    gl_FragColor = vec4(vec3(step(0.5, g)) * grainAlpha / max(alpha, 1e-4), alpha);
+    // gentle lens vignette: blends toward black at the corners
+    float alpha = smoothstep(0.55, 1.45, length(vNdc * vec2(1.0, 0.9))) * 0.22;
+    gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
   }
 `
 
@@ -664,7 +654,7 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
     if (!container) return
 
     const renderer = new THREE.WebGLRenderer({ antialias: true })
-    // 1.5 instead of 2: retina at 2x is ~1.8x the pixels for a difference hidden under the film grain
+    // 1.5 instead of 2: retina at 2x is ~1.8x the pixels for a difference barely visible at this scene's detail level
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.NeutralToneMapping
@@ -724,19 +714,18 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
     const butterflies = buildButterflies()
     scene.add(butterflies.mesh)
 
-    const grainScene = new THREE.Scene()
-    const grainCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
-    const grainMaterial = new THREE.ShaderMaterial({
-      vertexShader: grainVertexShader,
-      fragmentShader: grainFragmentShader,
-      uniforms: { uTime: { value: 0 } },
+    const vignetteScene = new THREE.Scene()
+    const vignetteCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    const vignetteMaterial = new THREE.ShaderMaterial({
+      vertexShader: vignetteVertexShader,
+      fragmentShader: vignetteFragmentShader,
       transparent: true,
       depthTest: false,
       depthWrite: false,
     })
-    const grainQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), grainMaterial)
-    grainQuad.frustumCulled = false
-    grainScene.add(grainQuad)
+    const vignetteQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), vignetteMaterial)
+    vignetteQuad.frustumCulled = false
+    vignetteScene.add(vignetteQuad)
 
     const resize = () => {
       const { clientWidth, clientHeight } = container
@@ -759,7 +748,6 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
       const t = (performance.now() - start) / 1000
       skyMaterial.uniforms.uTime.value = t
       grassMaterial.uniforms.uTime.value = t
-      grainMaterial.uniforms.uTime.value = t
 
       skyMaterial.uniforms.uClouds.value = view.clouds
       camera.position.x = Math.sin(t * 0.08) * 0.35
@@ -780,7 +768,7 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
       if (!view.throttled || frame++ % 2 === 0) {
         renderer.clear()
         renderer.render(scene, camera)
-        renderer.render(grainScene, grainCamera)
+        renderer.render(vignetteScene, vignetteCamera)
       }
       raf = requestAnimationFrame(animate)
     }
@@ -798,8 +786,8 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
       farGrass.geometry.dispose()
       grassMaterial.dispose()
       butterflies.dispose()
-      grainQuad.geometry.dispose()
-      grainMaterial.dispose()
+      vignetteQuad.geometry.dispose()
+      vignetteMaterial.dispose()
       container.removeChild(renderer.domElement)
     }
   }, [view])
