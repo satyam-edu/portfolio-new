@@ -619,6 +619,8 @@ function buildButterflies() {
 
   const mesh = new THREE.InstancedMesh(geometry, material, BUTTERFLY_COUNT)
   mesh.frustumCulled = false
+  // rewritten every frame
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
   const dummy = new THREE.Object3D()
   dummy.rotation.order = 'YXZ'
 
@@ -745,11 +747,16 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
     resize()
     window.addEventListener('resize', resize)
 
-    const clock = new THREE.Clock()
+    // one full render up front compiles every shader and uploads the 310k instance matrices while the loader is
+    // showing, so nothing hitches when the field is hidden below and later scrolls into view mid-pan
+    renderer.render(scene, camera)
+    const field = [grass, farGrass, ground, butterflies.mesh]
+
+    const start = performance.now()
     let raf: number
     let frame = 0
     const animate = () => {
-      const t = clock.getElapsedTime()
+      const t = (performance.now() - start) / 1000
       skyMaterial.uniforms.uTime.value = t
       grassMaterial.uniforms.uTime.value = t
       grainMaterial.uniforms.uTime.value = t
@@ -763,7 +770,11 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
       camera.lookAt(lookTarget)
       sky.position.copy(camera.position)
 
-      butterflies.update(t, butterflyTarget.current)
+      // everything on the field sits (almost) below eye height, so it projects below the horizon line; while the
+      // horizon is off the bottom of the frame (landing screen, early pan) the whole field is invisible — skip it
+      const showField = REST_HORIZON + view.shift < 1.05
+      for (const m of field) m.visible = showField
+      if (showField) butterflies.update(t, butterflyTarget.current)
 
       // while the UI slides, draw every other frame: the scene keeps moving (30fps) but leaves the GPU room for the compositor
       if (!view.throttled || frame++ % 2 === 0) {
