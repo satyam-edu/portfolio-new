@@ -19,6 +19,11 @@ function App() {
   const sceneRef = useRef<HTMLDivElement>(null)
   const [openPanel, setOpenPanel] = useState<'skills' | 'work' | 'projects' | 'contact' | null>(null)
   const isOpen = openPanel !== null
+  const [resumeOpen, setResumeOpen] = useState(false)
+  const resumeModalRef = useRef<HTMLDivElement>(null)
+  // sequencing flags: set right before closing one panel, consumed once its close animation finishes
+  const pendingResumeOpenRef = useRef(false)
+  const pendingPanelRef = useRef<false | 'skills' | 'work' | 'projects' | 'contact' | null>(false)
   const drawerRef = useRef<HTMLElement>(null)
   const tlRef = useRef<gsap.core.Timeline | null>(null)
   const trackRef = useRef<HTMLDivElement>(null)
@@ -170,7 +175,35 @@ function App() {
     gsap.set(enterBtnRef.current, { opacity: 0, y: 10 })
     gsap.set(revealRef.current, { width: 0 })
     gsap.set([slashRef.current, audioOptionRef.current], { opacity: 0 })
+    gsap.set(resumeModalRef.current, { yPercent: -100, opacity: 0, pointerEvents: 'none' })
   }, [])
+
+  // open/close the Resume window as one unit — header, body and its corner fillets all slide together,
+  // straight up into the (overflow-hidden) top boundary of <main>, instead of only the body clipping
+  useEffect(() => {
+    const el = resumeModalRef.current
+    if (!el) return
+    gsap.killTweensOf(el)
+    if (resumeOpen) {
+      gsap.set(el, { pointerEvents: 'auto' })
+      gsap.fromTo(el, { yPercent: -100, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.45, ease: 'power3.out', force3D: true })
+    } else {
+      gsap.to(el, {
+        yPercent: -100,
+        opacity: 0,
+        duration: 0.35,
+        ease: 'power3.in',
+        force3D: true,
+        onComplete: () => {
+          gsap.set(el, { pointerEvents: 'none' })
+          if (pendingPanelRef.current === false) return
+          const next = pendingPanelRef.current
+          pendingPanelRef.current = false
+          setOpenPanel(next)
+        },
+      })
+    }
+  }, [resumeOpen])
 
   // keep the resting positions right if the viewport resizes (drawer width is viewport-relative)
   useEffect(() => {
@@ -211,6 +244,12 @@ function App() {
       // content is gone before the panel starts collapsing
       tl.to(items, { opacity: 0, y: 24, duration: 0.15, ease: 'power2.in', overwrite: 'auto' }, 0)
       slide(0.15)
+      if (pendingResumeOpenRef.current) {
+        tl.call(() => {
+          pendingResumeOpenRef.current = false
+          setResumeOpen(true)
+        }, [], 0.15 + slideDur)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
@@ -232,7 +271,8 @@ function App() {
       </div>
 
       <div className="pointer-events-none absolute inset-0 z-10">
-        {isOpen && <div className="pointer-events-auto absolute inset-0 z-10" onClick={() => setOpenPanel(null)} />}
+        {/* blocks clicks to the scene behind while a drawer is open; no onClick, so outside clicks don't close it */}
+        {isOpen && <div className="pointer-events-auto absolute inset-0 z-10" />}
 
         <div
           ref={topRef}
@@ -274,9 +314,62 @@ function App() {
         </div>
 
         <div
+          ref={resumeModalRef}
+          className={`c-window c-window--resume z-40 w-[clamp(580px,48vw,760px)] h-[clamp(520px,68vh,660px)] will-change-transform ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        >
+          <div className="c-window__header">
+            <div className="c-window__header__left">
+              <div className="c-window__header__title">Resume</div>
+            </div>
+            <div className="c-window__header__dots">
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setResumeOpen(false)}
+                className="c-window__header__dots__dot hover:bg-neutral-400 cursor-pointer"
+              />
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setResumeOpen(false)}
+                className="c-window__header__dots__dot hover:bg-neutral-400 cursor-pointer"
+              />
+            </div>
+          </div>
+          <div className="c-window__inner">
+            <div
+              className="h-full w-full flex-1 overflow-y-auto overscroll-contain bg-[#f0f3f8] p-4 select-none"
+              style={{ WebkitOverflowScrolling: 'touch', transform: 'translateZ(0)', willChange: 'scroll-position' }}
+            >
+              <div className="flex justify-center">
+                <img
+                  src="/resume/resume-preview.png"
+                  alt="Satyam - Resume"
+                  loading="eager"
+                  className="w-full max-w-[620px] rounded border border-neutral-200/80 bg-white shadow-md"
+                />
+              </div>
+            </div>
+            <div className="c-window__divider" />
+            <div className="flex h-12 shrink-0 items-center justify-between bg-white px-4">
+              <span className="shrink-0 text-[11px] font-medium text-neutral-900">Satyam</span>
+              <span className="flex-1 text-center text-[11px] text-neutral-500">1 / 1</span>
+              <a
+                href="https://drive.google.com/file/d/1-ucNOlXDcLJVBOH7YIrt6TsPwHHmy68i/view?usp=sharing"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="c-button c-button--main"
+              >
+                <span>View Full Drive ↗</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div
           ref={desktopRef}
           style={{ opacity: 0 }}
-          className={`absolute bottom-6 left-16 will-change-transform ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
+          className={`absolute bottom-6 left-16 z-20 flex items-end gap-3 will-change-transform ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
         >
           <button
             onClick={() => setButterflyIdx((i) => (i + 1) % BUTTERFLY_COLORS.length)}
@@ -292,6 +385,44 @@ function App() {
             </div>
             <span className="rounded-full bg-[#3d4a2a]/80 px-3 py-0.5 font-sans text-[11px] font-bold text-white backdrop-blur-sm">
               Butterflies
+            </span>
+          </button>
+
+          <button
+            type="button"
+            aria-label={resumeOpen ? 'Close resume' : 'Open resume'}
+            onClick={() => {
+              if (resumeOpen) {
+                setResumeOpen(false)
+                return
+              }
+              if (isOpen) {
+                pendingResumeOpenRef.current = true
+                setOpenPanel(null)
+              } else {
+                setResumeOpen(true)
+              }
+            }}
+            className="flex w-16 shrink-0 cursor-pointer relative z-30 flex-col items-center gap-2 transition-transform duration-150 active:scale-[0.92]"
+          >
+            <div className="relative flex h-14 w-12 flex-col items-center justify-center gap-1 overflow-hidden rounded-lg bg-gradient-to-b from-white to-[#f6e9d8] shadow-[0_2px_6px_rgba(0,0,0,0.18)]">
+              <span className="absolute top-0 right-0 h-3.5 w-3.5 rounded-bl-md bg-white shadow-[-1px_1px_1px_rgba(0,0,0,0.08)]" />
+              {resumeOpen ? (
+                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="#6b5638" strokeWidth="2" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              ) : (
+                /* folded-corner document glyph, echoing the butterfly icon's folder aesthetic */
+                <div className="relative flex h-7 w-6 flex-col gap-[3px] rounded-[3px] border border-[#b8a276] bg-[#fdf8ee] p-1.5 pt-2">
+                  <span className="absolute top-0 right-0 h-1.5 w-1.5 bg-[#e8ddc4]" style={{ clipPath: 'polygon(100% 0, 0 0, 100% 100%)' }} />
+                  <i className="h-[2px] w-full rounded-full bg-[#8a6f4a]/70" />
+                  <i className="h-[2px] w-full rounded-full bg-[#8a6f4a]/70" />
+                  <i className="h-[2px] w-2/3 rounded-full bg-[#8a6f4a]/70" />
+                </div>
+              )}
+            </div>
+            <span className="rounded-full bg-[#3d4a2a]/80 px-3 py-0.5 font-sans text-[11px] font-bold whitespace-nowrap text-white backdrop-blur-sm">
+              {resumeOpen ? 'Close' : 'Resume'}
             </span>
           </button>
         </div>
@@ -720,7 +851,13 @@ function App() {
                     onClick={(e) => {
                       e.stopPropagation()
                       const key = label.toLowerCase()
-                      if (key === 'skills' || key === 'work' || key === 'projects' || key === 'contact') setOpenPanel((p) => (p === key ? null : key))
+                      if (key !== 'skills' && key !== 'work' && key !== 'projects' && key !== 'contact') return
+                      if (resumeOpen) {
+                        pendingPanelRef.current = openPanel === key ? null : key
+                        setResumeOpen(false)
+                      } else {
+                        setOpenPanel((p) => (p === key ? null : key))
+                      }
                     }}
                     className={`group relative mx-auto cursor-pointer flex w-[26px] items-center justify-center px-0.5 py-2.5 font-sans text-[11px] font-bold tracking-[0.1em] text-neutral-900 uppercase ${h}`}
                   >

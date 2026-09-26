@@ -25,9 +25,26 @@ body {
   z-index: 30;
 }
 
+.c-window--resume {
+  position: absolute;
+  top: -2px;
+  left: 120px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-window--resume .c-window__inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
 /* Inverted fillets: start at the inner edge of the 2px frame (top: 2px) so the arc is tangent to both the frame and the card. */
 .c-window--contact::before,
-.c-window--contact::after {
+.c-window--contact::after,
+.c-window--resume::before,
+.c-window--resume::after {
   content: '';
   position: absolute;
   top: 2px;
@@ -36,12 +53,14 @@ body {
   pointer-events: none;
 }
 
-.c-window--contact::before {
+.c-window--contact::before,
+.c-window--resume::before {
   right: 100%;
   background: radial-gradient(circle at 0 100%, transparent 15.5px, #ffffff 16px);
 }
 
-.c-window--contact::after {
+.c-window--contact::after,
+.c-window--resume::after {
   left: 100%;
   background: radial-gradient(circle at 100% 100%, transparent 15.5px, #ffffff 16px);
 }
