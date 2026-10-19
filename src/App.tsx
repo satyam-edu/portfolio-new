@@ -808,7 +808,7 @@ function App() {
               )}
             </div>
           </aside>
-          <nav className="absolute inset-y-0 right-0 flex w-11 flex-col items-center bg-white py-3">
+          <nav className="absolute inset-y-0 right-0 flex w-11 flex-col items-center overflow-y-auto bg-white py-3 [scrollbar-width:none] [@media(max-height:500px)]:py-1 [&::-webkit-scrollbar]:hidden">
             <button
               type="button"
               aria-label={isOpen ? 'Close panel' : 'Menu'}
@@ -831,20 +831,20 @@ function App() {
             <div
               ref={trackRef}
               aria-hidden
-              className={`relative my-5 min-h-0 w-[5px] flex-1 rounded-full bg-neutral-200/60 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+              className={`relative my-5 min-h-0 w-[5px] flex-1 shrink rounded-full bg-neutral-200/60 transition-opacity duration-300 [@media(max-height:500px)]:my-2 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
             >
               <div ref={thumbRef} className="absolute top-0 h-[min(200px,100%)] w-full rounded-full bg-neutral-400" />
             </div>
-            <div className="mt-auto mb-6 flex flex-col items-center gap-2">
+            <div className="mt-auto mb-6 flex shrink-0 flex-col items-center gap-2 [@media(max-height:500px)]:mb-2 [@media(max-height:500px)]:gap-1">
               {(
                 [
-                  ['Skills', 'min-h-[70px]'],
-                  ['Work', 'min-h-[60px]'],
-                  ['Projects', 'min-h-[90px]'],
-                  ['Contact', 'min-h-[82px]'],
+                  ['Skills', 'min-h-[70px] [@media(max-height:500px)]:min-h-[44px]'],
+                  ['Work', 'min-h-[60px] [@media(max-height:500px)]:min-h-[38px]'],
+                  ['Projects', 'min-h-[90px] [@media(max-height:500px)]:min-h-[56px]'],
+                  ['Contact', 'min-h-[82px] [@media(max-height:500px)]:min-h-[52px]'],
                 ] as const
               ).map(([label, h], i) => (
-                <div key={label} className="flex flex-col items-center gap-2">
+                <div key={label} className="flex shrink-0 flex-col items-center gap-2 [@media(max-height:500px)]:gap-1">
                   {i > 0 && <span className="h-px w-4 bg-neutral-300/60" />}
                   <button
                     type="button"
