@@ -21,9 +21,15 @@ const FAR_DEPTH = 60
 const EXPOSURE = 1.0
 const CLUMP_RADIUS = 0.1
 const BUTTERFLY_COUNT = 45
+const FIREFLY_COUNT = 160
+export const FIREFLY_COLORS = ['#d9ff6b', '#ffd166', '#9bffb0', '#8fe3ff', '#ffa8d6']
 
 const SKY_ZENITH = '#3470e0'
 const SKY_HORIZON = '#b8d4ee'
+const NIGHT_ZENITH = '#030716'
+const NIGHT_HORIZON = '#1b2a52'
+// seconds for a full day <-> night crossfade
+const NIGHT_FADE = 1.6
 
 const NOISE_GLSL = /* glsl */ `
   float hash21(vec2 p) {
@@ -106,10 +112,60 @@ const skyVertexShader = /* glsl */ `
 const skyFragmentShader = /* glsl */ `
   uniform float uTime;
   uniform float uClouds;
+  uniform float uNight;
   uniform vec3 uZenith;
   uniform vec3 uHorizon;
   varying vec3 vWorldPos;
   ${NOISE_GLSL}
+
+  float hash13(vec3 p3) {
+    p3 = fract(p3 * 0.1031);
+    p3 += dot(p3, p3.zyx + 31.32);
+    return fract((p3.x + p3.y) * p3.z);
+  }
+  vec3 hash33(vec3 p3) {
+    p3 = fract(p3 * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yxz + 33.33);
+    return fract((p3.xxy + p3.yxx) * p3.zyx);
+  }
+
+  // One star per occupied cell of a 3D grid laid over the unit sphere: isotropic, no pole pinching.
+  // Each star twinkles at its own rate, and some barely twinkle at all, so the field never pulses in sync.
+  vec3 starLayer(vec3 d, float scale, float density, float minR, float maxR) {
+    vec3 id = floor(d * scale);
+    float h = hash13(id);
+    if (h > density) return vec3(0.0);
+    vec3 r = hash33(id + 11.0);
+    vec3 starDir = normalize(id + 0.5 + (r - 0.5) * 0.5);
+    float dist = length(d - starDir) * scale;
+    float radius = mix(minR, maxR, r.x * r.x);
+    float core = smoothstep(radius, 0.0, dist);
+    float glow = exp(-dist / radius * 1.6) * 0.35;
+    float speed = mix(1.2, 4.5, r.y);
+    float twinkle = mix(1.0, 0.35 + 0.65 * (0.5 + 0.5 * sin(uTime * speed + h * 80.0)), smoothstep(0.2, 0.8, r.z));
+    vec3 tint = mix(vec3(0.72, 0.82, 1.0), vec3(1.0, 0.9, 0.74), r.z);
+    return tint * (core + glow) * twinkle * mix(0.5, 1.3, r.y);
+  }
+
+  // A meteor every ~7s on average: random start in the upper sky, streaks down-sideways with a fading tail.
+  float shootingStar(vec3 d) {
+    float period = 7.0;
+    float n = floor(uTime / period);
+    vec3 r = hash33(vec3(n, n * 1.7, 3.1));
+    if (r.z < 0.3) return 0.0;
+    float dur = 1.1;
+    float lt = uTime - n * period - r.x * (period - dur);
+    if (lt < 0.0 || lt > dur) return 0.0;
+    vec2 a = vec2(atan(d.x, -d.z), asin(clamp(d.y, -1.0, 1.0)));
+    vec2 start = vec2((r.x - 0.5) * 1.2, 0.32 + r.y * 0.3);
+    vec2 vel = normalize(vec2(r.z < 0.65 ? -1.0 : 1.0, -0.5)) * 0.55;
+    vec2 tail = -normalize(vel);
+    vec2 rel = a - (start + vel * lt);
+    float along = dot(rel, tail);
+    float across = length(rel - tail * along);
+    float streak = step(0.0, along) * (1.0 - smoothstep(0.0, 0.16, along)) * smoothstep(0.0022, 0.0, across);
+    return streak * sin(lt / dur * 3.14159) * 1.6;
+  }
 
   void main() {
     vec3 dir = normalize(vWorldPos - cameraPosition);
@@ -117,6 +173,7 @@ const skyFragmentShader = /* glsl */ `
     vec3 sky = mix(uHorizon, uZenith, smoothstep(0.0, 1.0, pow(h, 0.55)));
 
     vec3 color = sky;
+    float density = 0.0;
     // clouds are the most expensive part of the frame; skip them entirely before the pan and near the horizon
     if (uClouds > 0.001 && h > 0.02) {
       // project the view ray onto a cloud deck overhead; +0.12 stops the horizon stretching to infinity
@@ -126,12 +183,24 @@ const skyFragmentShader = /* glsl */ `
       float base = fbm(uv + wind + warp * 0.6);
       // faster high-frequency erosion on the edges gives the billowy, drifting cumulus look
       float detail = fbm(uv * 3.2 + wind * 2.0);
-      float density = smoothstep(0.48, 0.78, base + (detail - 0.5) * 0.28);
-      density *= smoothstep(0.02, 0.22, h) * uClouds;
+      density = smoothstep(0.48, 0.78, base + (detail - 0.5) * 0.28);
+      // thinner at night so the stars carry the sky
+      density *= smoothstep(0.02, 0.22, h) * uClouds * mix(1.0, 0.6, uNight);
 
-      // bright billow cores, thin edges stay tinted by the sky behind them
-      vec3 cloudCol = mix(sky + vec3(0.18), vec3(1.0), smoothstep(0.3, 1.0, density));
-      color = mix(sky, cloudCol, density * 0.9);
+      // bright billow cores, thin edges stay tinted by the sky behind them; at night, dim moonlit grey-blue
+      vec3 dayCloud = mix(sky + vec3(0.18), vec3(1.0), smoothstep(0.3, 1.0, density));
+      vec3 nightCloud = mix(sky + vec3(0.03, 0.04, 0.07), vec3(0.2, 0.23, 0.34), smoothstep(0.3, 1.0, density));
+      color = mix(sky, mix(dayCloud, nightCloud, uNight), density * 0.9);
+    }
+
+    if (uNight > 0.001 && h > 0.0) {
+      // the whole star field turns slowly overhead, so even untwinkling stars drift
+      float ang = uTime * 0.004;
+      vec3 sd = vec3(cos(ang) * dir.x - sin(ang) * dir.z, dir.y, sin(ang) * dir.x + cos(ang) * dir.z);
+      vec3 stars = starLayer(sd, 150.0, 0.09, 0.12, 0.22) + starLayer(sd, 55.0, 0.06, 0.07, 0.13);
+      stars += vec3(0.9, 0.95, 1.0) * shootingStar(dir);
+      // fade out into the horizon haze and behind clouds
+      color += stars * smoothstep(0.0, 0.16, h) * (1.0 - density) * uNight;
     }
 
     gl_FragColor = vec4(color, 1.0);
@@ -215,6 +284,7 @@ const grassFragmentShader = /* glsl */ `
   uniform vec3 uTip;
   uniform vec3 uTipDry;
   uniform vec3 uSunDir;
+  uniform float uNight;
   varying float vHeight;
   varying float vTint;
   varying float vPatch;
@@ -249,13 +319,16 @@ const grassFragmentShader = /* glsl */ `
     float translucency = backlit * vHeight * vHeight;
     float cloudShadow = mix(0.62, 1.0, smoothstep(0.35, 0.65, vCloudShade));
 
-    vec3 skyAmbient = vec3(0.16, 0.2, 0.27);
-    vec3 sun = vec3(1.1, 1.04, 0.88) * cloudShadow;
+    // night swaps the sun for a cool, dim moon from the same direction
+    vec3 skyAmbient = mix(vec3(0.16, 0.2, 0.27), vec3(0.015, 0.025, 0.055), uNight);
+    vec3 sun = mix(vec3(1.1, 1.04, 0.88), vec3(0.09, 0.13, 0.24), uNight) * cloudShadow;
     vec3 col = albedo * (skyAmbient + sun * diffuse) * ao;
-    col += albedo * vec3(1.1, 1.2, 0.55) * translucency * cloudShadow * 0.9;
+    col += albedo * mix(vec3(1.1, 1.2, 0.55), vec3(0.1, 0.14, 0.2), uNight) * translucency * cloudShadow * 0.9;
     // gust crests flatten blades so their faces catch the sky; troughs stand upright and darker.
     // This bright/dark band travelling with the gust field is what makes the waves visible from afar.
     col *= 1.0 + (vGust * 0.45 - 0.12) * vHeight;
+    // moonlight washes out colour: desaturate and cool the field at night
+    col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))) * vec3(0.65, 0.85, 1.25), uNight * 0.55);
 
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -282,6 +355,7 @@ const groundFragmentShader = /* glsl */ `
   uniform vec3 uMid;
   uniform vec3 uTip;
   uniform vec3 uSunDir;
+  uniform float uNight;
   varying vec3 vWorldPos;
   #include <fog_pars_fragment>
   ${NOISE_GLSL}
@@ -296,9 +370,12 @@ const groundFragmentShader = /* glsl */ `
 
     float cloudShadow = mix(0.62, 1.0, smoothstep(0.35, 0.65, valueNoise(xz * 0.045 + vec2(uTime * 0.025, uTime * 0.01))));
     float diffuse = max((uSunDir.y + 0.15) / 1.15, 0.0);
-    vec3 col = albedo * (vec3(0.16, 0.2, 0.27) + vec3(1.1, 1.04, 0.88) * cloudShadow * diffuse * 0.8);
+    vec3 ambient = mix(vec3(0.16, 0.2, 0.27), vec3(0.015, 0.025, 0.055), uNight);
+    vec3 sun = mix(vec3(1.1, 1.04, 0.88), vec3(0.09, 0.13, 0.24), uNight);
+    vec3 col = albedo * (ambient + sun * cloudShadow * diffuse * 0.8);
     // near the camera the ground is only glimpsed deep between blades, where it sits in their shade
     col *= mix(0.35, 1.0, smoothstep(6.0, 30.0, distance(vWorldPos, cameraPosition)));
+    col = mix(col, vec3(dot(col, vec3(0.3, 0.59, 0.11))) * vec3(0.65, 0.85, 1.25), uNight * 0.55);
 
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -434,6 +511,7 @@ function buildGrass() {
         uTipDry: { value: new THREE.Color('#c9cd3c') },
         // sun ahead-left and high, so the field is partly backlit from the camera's view
         uSunDir: { value: new THREE.Vector3(-0.35, 0.75, -0.55).normalize() },
+        uNight: { value: 0 },
       },
     ]),
     side: THREE.DoubleSide,
@@ -614,9 +692,12 @@ function buildButterflies() {
   const dummy = new THREE.Object3D()
   dummy.rotation.order = 'YXZ'
 
-  const update = (t: number, color: THREE.Color) => {
+  const update = (t: number, color: THREE.Color, night: number) => {
     material.uniforms.uTime.value = t
     material.uniforms.uButterflyColor.value.lerp(color, 0.08)
+    mesh.visible = night < 0.999
+    // butterflies settle into the grass as night falls
+    const fade = 1 - night
     for (let i = 0; i < BUTTERFLY_COUNT; i++) {
       const f = flights[i]
       const ax = t * f.sx + f.p1
@@ -627,7 +708,7 @@ function buildButterflies() {
       dummy.position.set(x, f.y + Math.sin(t * 1.3 + f.p1) * 0.03, f.z + Math.sin(az) * f.rz)
       // face along the flight path (drift + wander), nose tilted slightly up
       dummy.rotation.set(-0.3, Math.atan2(f.vx + Math.cos(ax) * f.rx * f.sx, Math.cos(az) * f.rz * f.sz), 0)
-      dummy.scale.setScalar(f.scale)
+      dummy.scale.setScalar(f.scale * fade)
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
     }
@@ -642,12 +723,119 @@ function buildButterflies() {
   return { mesh, update, dispose }
 }
 
-export default function GrassSkyScene({ view, butterflyColor }: { view: CameraView; butterflyColor: string }) {
+const fireflyVertexShader = /* glsl */ `
+  attribute vec4 aRand;
+  uniform float uTime;
+  uniform float uSize;
+  varying float vGlow;
+
+  void main() {
+    // every firefly wanders on its own slow looping path, entirely on the GPU
+    float ph = aRand.x * 6.2831;
+    float sp = 0.5 + aRand.y;
+    float r = 0.15 + aRand.z * 0.35;
+    vec3 p = position;
+    p.x += sin(uTime * 0.23 * sp + ph) * r + sin(uTime * 0.61 + ph * 2.0) * r * 0.35;
+    p.z += cos(uTime * 0.19 * sp + ph * 1.3) * r;
+    p.y += sin(uTime * 0.5 * sp + ph) * 0.05;
+
+    // real fireflies flash, then go dark: sharp pulses on a slower, irregular envelope
+    float pulse = pow(max(sin(uTime * mix(1.1, 2.6, aRand.w) + ph * 3.0), 0.0), 4.0);
+    float envelope = 0.6 + 0.4 * sin(uTime * 0.37 + ph * 5.0);
+    vGlow = 0.22 + pulse * envelope * 1.2;
+
+    vec4 mv = viewMatrix * modelMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = uSize * (0.55 + vGlow * 0.45) / -mv.z;
+  }
+`
+
+const fireflyFragmentShader = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uNight;
+  varying float vGlow;
+
+  void main() {
+    float d = length(gl_PointCoord - 0.5) * 2.0;
+    float core = smoothstep(0.28, 0.0, d);
+    float halo = pow(max(1.0 - d, 0.0), 2.2) * 0.7;
+    float a = (core + halo) * vGlow * uNight;
+    if (a < 0.003) discard;
+    gl_FragColor = vec4(mix(uColor, vec3(1.0), core * 0.5) * a, a);
+    #include <colorspace_fragment>
+  }
+`
+
+function buildFireflies(pixelRatio: number) {
+  const positions = new Float32Array(FIREFLY_COUNT * 3)
+  const rands = new Float32Array(FIREFLY_COUNT * 4)
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    const depth = 0.4 + Math.pow(Math.random(), 1.3) * 18
+    const halfWidth = 2 + depth * 1.05
+    positions[i * 3] = (Math.random() - 0.5) * 2 * halfWidth
+    // some hover just above the tips, some drift down inside the grass where the blades occlude them
+    positions[i * 3 + 1] = (0.16 + Math.random() * 0.34) * (1 + Math.min(depth, 36) * 0.035)
+    positions[i * 3 + 2] = FIELD_NEAR - depth
+    for (let k = 0; k < 4; k++) rands[i * 4 + k] = Math.random()
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('aRand', new THREE.BufferAttribute(rands, 4))
+
+  const material = new THREE.ShaderMaterial({
+    vertexShader: fireflyVertexShader,
+    fragmentShader: fireflyFragmentShader,
+    uniforms: {
+      uTime: { value: 0 },
+      uNight: { value: 0 },
+      uSize: { value: 80 * pixelRatio },
+      uColor: { value: new THREE.Color(FIREFLY_COLORS[0]) },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+  const points = new THREE.Points(geometry, material)
+  points.frustumCulled = false
+
+  const update = (t: number, color: THREE.Color, night: number) => {
+    material.uniforms.uTime.value = t
+    material.uniforms.uNight.value = night
+    material.uniforms.uColor.value.lerp(color, 0.08)
+    points.visible = night > 0.001
+  }
+  const dispose = () => {
+    geometry.dispose()
+    material.dispose()
+  }
+  return { points, update, dispose }
+}
+
+export default function GrassSkyScene({
+  view,
+  butterflyColor,
+  fireflyColor,
+  night,
+}: {
+  view: CameraView
+  butterflyColor: string
+  fireflyColor: string
+  night: boolean
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const butterflyTarget = useRef(new THREE.Color(butterflyColor))
+  const fireflyTarget = useRef(new THREE.Color(fireflyColor))
+  // read by the render loop every frame, so toggling never rebuilds the scene
+  const nightTarget = useRef(night ? 1 : 0)
   useEffect(() => {
     butterflyTarget.current.set(butterflyColor)
   }, [butterflyColor])
+  useEffect(() => {
+    fireflyTarget.current.set(fireflyColor)
+  }, [fireflyColor])
+  useEffect(() => {
+    nightTarget.current = night ? 1 : 0
+  }, [night])
 
   useEffect(() => {
     const container = containerRef.current
@@ -677,6 +865,7 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
       uniforms: {
         uTime: { value: 0 },
         uClouds: { value: 0 },
+        uNight: { value: 0 },
         uZenith: { value: new THREE.Color(SKY_ZENITH) },
         uHorizon: { value: new THREE.Color(SKY_HORIZON) },
       },
@@ -703,6 +892,7 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
         uMid: grassMaterial.uniforms.uMid,
         uTip: grassMaterial.uniforms.uTip,
         uSunDir: grassMaterial.uniforms.uSunDir,
+        uNight: grassMaterial.uniforms.uNight,
       },
       fog: true,
     })
@@ -713,6 +903,14 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
 
     const butterflies = buildButterflies()
     scene.add(butterflies.mesh)
+    const fireflies = buildFireflies(renderer.getPixelRatio())
+    scene.add(fireflies.points)
+
+    const dayZenith = new THREE.Color(SKY_ZENITH)
+    const dayHorizon = new THREE.Color(SKY_HORIZON)
+    const nightZenith = new THREE.Color(NIGHT_ZENITH)
+    const nightHorizon = new THREE.Color(NIGHT_HORIZON)
+    let night = nightTarget.current
 
     const vignetteScene = new THREE.Scene()
     const vignetteCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
@@ -739,18 +937,33 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
     // one full render up front compiles every shader and uploads the 310k instance matrices while the loader is
     // showing, so nothing hitches when the field is hidden below and later scrolls into view mid-pan
     renderer.render(scene, camera)
-    const field = [grass, farGrass, ground, butterflies.mesh]
+    const field = [grass, farGrass, ground, butterflies.mesh, fireflies.points]
 
     const start = performance.now()
     let raf: number
     let frame = 0
+    let last = 0
     const animate = () => {
       const t = (performance.now() - start) / 1000
+      const dt = Math.min(t - last, 0.1)
+      last = t
       skyMaterial.uniforms.uTime.value = t
       grassMaterial.uniforms.uTime.value = t
 
+      // ease toward the requested theme; every shader reads the same 0..1 value, so they cross-fade together
+      const step = dt / NIGHT_FADE
+      night = nightTarget.current > night ? Math.min(night + step, 1) : Math.max(night - step, 0)
+      const k = night * night * (3 - 2 * night)
+      skyMaterial.uniforms.uNight.value = k
+      grassMaterial.uniforms.uNight.value = k
+      skyMaterial.uniforms.uZenith.value.copy(dayZenith).lerp(nightZenith, k)
+      skyMaterial.uniforms.uHorizon.value.copy(dayHorizon).lerp(nightHorizon, k)
+      ;(scene.fog as THREE.Fog).color.copy(skyMaterial.uniforms.uHorizon.value)
+
       skyMaterial.uniforms.uClouds.value = view.clouds
-      camera.position.x = Math.sin(t * 0.08) * 0.35
+      // the sway reads as gentle drift against moving clouds, but against fixed stars it looks like the
+      // whole field rocking, so it settles to still as night falls
+      camera.position.x = Math.sin(t * 0.08) * 0.35 * (1 - k)
       // the horizon (elevation 0) projects tan(pitch)/tan(fov/2) half-frames below centre, so solving for
       // tan(pitch) from the wanted screen position makes the horizon's on-screen travel linear in `shift`
       const tanPitch = (REST_HORIZON + view.shift - 0.5) * 2 * TAN_HALF_FOV
@@ -762,7 +975,10 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
       // horizon is off the bottom of the frame (landing screen, early pan) the whole field is invisible — skip it
       const showField = REST_HORIZON + view.shift < 1.05
       for (const m of field) m.visible = showField
-      if (showField) butterflies.update(t, butterflyTarget.current)
+      if (showField) {
+        butterflies.update(t, butterflyTarget.current, k)
+        fireflies.update(t, fireflyTarget.current, k)
+      }
 
       // while the UI slides, draw every other frame: the scene keeps moving (30fps) but leaves the GPU room for the compositor
       if (!view.throttled || frame++ % 2 === 0) {
@@ -786,6 +1002,7 @@ export default function GrassSkyScene({ view, butterflyColor }: { view: CameraVi
       farGrass.geometry.dispose()
       grassMaterial.dispose()
       butterflies.dispose()
+      fireflies.dispose()
       vignetteQuad.geometry.dispose()
       vignetteMaterial.dispose()
       container.removeChild(renderer.domElement)
