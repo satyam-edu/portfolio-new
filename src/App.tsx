@@ -315,7 +315,7 @@ function App() {
 
         <div
           ref={resumeModalRef}
-          className={`c-window c-window--resume z-40 w-[clamp(580px,48vw,760px)] h-[clamp(520px,68vh,660px)] will-change-transform ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
+          className={`c-window c-window--resume z-40 w-[clamp(400px,48vw,760px)] max-w-[calc(100%-32px)] h-[clamp(320px,68vh,640px)] max-h-[calc(100%-150px)] will-change-transform ${entered ? 'pointer-events-auto' : 'pointer-events-none'}`}
         >
           <div className="c-window__header">
             <div className="c-window__header__left">
