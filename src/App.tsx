@@ -632,6 +632,13 @@ function App() {
                           desc: 'Responsive travel platform designed with intuitive journeys for trip discovery, user authentication, host dashboards, and trip management.',
                           stack: ['React', 'TypeScript', 'Node.js', 'Express.js', 'Prisma ORM', 'PostgreSQL'],
                         },
+                        {
+                          name: 'PotKeeper - Live Pot & Ledger for 3 Patti',
+                          liveUrl: 'https://potkeeper.tech',
+                          repo: 'https://github.com/satyam-edu/potkeeper',
+                          desc: 'Realtime multiplayer pot tracker for 3 Patti games on a real table. Friends join a room by code or QR and bet, pack or show from their phones, while a shared game engine keeps the pot and every wallet balanced in whole rupees.',
+                          stack: ['React', 'TypeScript', 'Vite', 'Tailwind CSS', 'Cloudflare Workers', 'WebSockets', 'MongoDB', 'JWT Auth'],
+                        },
                       ],
                     },
                     {
