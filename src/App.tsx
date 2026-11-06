@@ -620,6 +620,7 @@ function App() {
                       projects: [
                         {
                           name: 'UniTrack - AI Powered Attendance Tracking PWA',
+                          logo: '/projects/unitrack.png',
                           liveUrl: 'https://www.unitrack.dev',
                           repo: 'https://github.com/satyam-edu/UniTrack',
                           desc: 'Responsive Progressive Web App featuring 13+ screens for subject wise attendance management, automated criteria, optimistic UI updates, and AI assisted timetable insights.',
@@ -627,6 +628,7 @@ function App() {
                         },
                         {
                           name: 'TripMate - Travel Companion Platform',
+                          logo: '/projects/tripmate.png',
                           liveUrl: 'https://tripmate-gamma-two.vercel.app/',
                           repo: 'https://github.com/satyam-edu/TripMate',
                           desc: 'Responsive travel platform designed with intuitive journeys for trip discovery, user authentication, host dashboards, and trip management.',
@@ -634,6 +636,7 @@ function App() {
                         },
                         {
                           name: 'PotKeeper - Live Pot & Ledger for 3 Patti',
+                          logo: '/projects/potkeeper.png',
                           liveUrl: 'https://potkeeper.tech',
                           repo: 'https://github.com/satyam-edu/potkeeper',
                           desc: 'Realtime multiplayer pot tracker for 3 Patti games on a real table. Friends join a room by code or QR and bet, pack or show from their phones, while a shared game engine keeps the pot and every wallet balanced in whole rupees.',
@@ -646,6 +649,7 @@ function App() {
                       projects: [
                         {
                           name: 'Hotel Kamala Inn Grand',
+                          logo: '/projects/kamala.png',
                           liveUrl: 'https://kamalainngrand.com',
                           repo: 'https://github.com/satyam-edu/Hotel-Management-Website',
                           desc: 'Production hotel booking platform and staff admin dashboard handling room reservations, dynamic inventory, guest inquiries, and role based staff administration.',
@@ -658,6 +662,7 @@ function App() {
                       projects: [
                         {
                           name: 'Youth Global HQ',
+                          logo: '/projects/youth.png',
                           liveUrl: 'https://youth-global-hq.vercel.app/',
                           repo: 'https://github.com/satyam-edu/Youth-Global-HQ',
                           desc: 'Interactive community and organizational hub built with clean responsive layouts, accessible navigation, and engaging UI components.',
@@ -665,6 +670,7 @@ function App() {
                         },
                         {
                           name: 'Pasco Foods',
+                          logo: '/projects/pasco.png',
                           liveUrl: 'https://pasco-foods-sigma.vercel.app/',
                           repo: 'https://github.com/satyam-edu/Pasco-Foods',
                           desc: 'Clean brand and product showcase interface focused on rich visual storytelling, responsive typography, and tactile micro interactions.',
@@ -677,8 +683,22 @@ function App() {
                       <span className="mb-3 block text-[10px] font-semibold tracking-wider text-neutral-400 uppercase">{category}</span>
                       {projects.map((proj, i) => (
                         <div key={proj.name} className={i > 0 ? 'mt-5 border-t border-neutral-200 pt-5' : ''}>
-                          <h3 className="text-[12px] leading-snug font-semibold text-neutral-900">{proj.name}</h3>
-                          <p className="mt-1.5 hyphens-none text-[11.5px] leading-normal font-normal text-neutral-500">{proj.desc}</p>
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-neutral-200 bg-white">
+                              {proj.logo ? (
+                                <img src={proj.logo} alt="" className="h-full w-full object-contain p-1" loading="lazy" />
+                              ) : (
+                                <span className="text-[15px] font-bold text-neutral-400">{proj.name[0]}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="text-[14.5px] leading-tight font-semibold tracking-tight text-neutral-900">{proj.name.split(' - ')[0]}</h3>
+                              {proj.name.includes(' - ') && (
+                                <p className="mt-0.5 text-[11px] leading-snug font-medium text-neutral-500">{proj.name.split(' - ')[1]}</p>
+                              )}
+                            </div>
+                          </div>
+                          <p className="mt-2.5 hyphens-none text-[11.5px] leading-normal font-normal text-neutral-500">{proj.desc}</p>
                           <div className="mt-2.5 flex flex-wrap gap-1.5">
                             {proj.stack.map((tech) => (
                               <span key={tech} className="rounded-full bg-neutral-200/70 px-2.5 py-1 text-[10px] font-medium text-neutral-700">
