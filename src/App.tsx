@@ -9,6 +9,11 @@ const AUDIO_FADE_IN = 1.5
 const RAIL_W = 44
 const BUTTERFLY_COLORS = ['#e63946', '#ff7b00', '#ffd166', '#80ed99', '#06d6a0', '#00b4d8', '#4361ee', '#b5179e', '#ff5d8f', '#f8f9fa']
 // expanded panel width in px, mirrors the CSS clamp on the sidebar
+// night = 6pm to 6am in India, whatever timezone the visitor's device is set to
+const isNightInIndia = () => {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Asia/Kolkata' }).format(new Date()))
+  return hour >= 18 || hour < 6
+}
 const drawerW = () => Math.min(520, Math.max(440, window.innerWidth * 0.37))
 
 function App() {
@@ -29,7 +34,7 @@ function App() {
   const trackRef = useRef<HTMLDivElement>(null)
   const thumbRef = useRef<HTMLDivElement>(null)
   const [butterflyIdx, setButterflyIdx] = useState(0)
-  const [night, setNight] = useState(false)
+  const [night, setNight] = useState(isNightInIndia)
   const desktopRef = useRef<HTMLDivElement>(null)
   const navRef = useRef<HTMLDivElement>(null)
   const topRef = useRef<HTMLDivElement>(null)
