@@ -28,6 +28,16 @@ const SKY_ZENITH = '#3470e0'
 const SKY_HORIZON = '#b8d4ee'
 const NIGHT_ZENITH = '#030716'
 const NIGHT_HORIZON = '#1b2a52'
+// Adaptive quality: starts at full detail and only steps down when the GPU can't hold ~45fps, so a strong
+// machine never loses anything. Blade counts are cut by shortening the instanced draw (blades are scattered
+// in random order, so the field just thins evenly); lite clouds drop the highest-frequency noise octave set.
+const QUALITY_TIERS = [
+  { pr: 1.5, blades: 1, far: 1, lite: 0 },
+  { pr: 1.25, blades: 0.7, far: 0.75, lite: 0 },
+  { pr: 1.0, blades: 0.5, far: 0.55, lite: 1 },
+  { pr: 0.8, blades: 0.35, far: 0.4, lite: 1 },
+]
+const SLOW_FRAME_S = 1 / 45
 // seconds for a full day <-> night crossfade
 const NIGHT_FADE = 1.6
 
@@ -113,6 +123,7 @@ const skyFragmentShader = /* glsl */ `
   uniform float uTime;
   uniform float uClouds;
   uniform float uNight;
+  uniform float uLite;
   uniform vec3 uZenith;
   uniform vec3 uHorizon;
   varying vec3 vWorldPos;
@@ -182,7 +193,7 @@ const skyFragmentShader = /* glsl */ `
       float warp = fbm(uv * 0.6 + wind * 0.5 + 3.0);
       float base = fbm(uv + wind + warp * 0.6);
       // faster high-frequency erosion on the edges gives the billowy, drifting cumulus look
-      float detail = fbm(uv * 3.2 + wind * 2.0);
+      float detail = uLite > 0.5 ? 0.5 : fbm(uv * 3.2 + wind * 2.0);
       density = smoothstep(0.48, 0.78, base + (detail - 0.5) * 0.28);
       // thinner at night so the stars carry the sky
       density *= smoothstep(0.02, 0.22, h) * uClouds * mix(1.0, 0.6, uNight);
@@ -199,6 +210,7 @@ const skyFragmentShader = /* glsl */ `
       vec3 sd = vec3(cos(ang) * dir.x - sin(ang) * dir.z, dir.y, sin(ang) * dir.x + cos(ang) * dir.z);
       vec3 stars = starLayer(sd, 150.0, 0.09, 0.12, 0.22) + starLayer(sd, 55.0, 0.06, 0.07, 0.13);
       stars += vec3(0.9, 0.95, 1.0) * shootingStar(dir);
+
       // fade out into the horizon haze and behind clouds
       color += stars * smoothstep(0.0, 0.16, h) * (1.0 - density) * uNight;
     }
@@ -808,7 +820,7 @@ function buildFireflies(pixelRatio: number) {
     geometry.dispose()
     material.dispose()
   }
-  return { points, update, dispose }
+  return { points, material, update, dispose }
 }
 
 export default function GrassSkyScene({
@@ -866,6 +878,7 @@ export default function GrassSkyScene({
         uTime: { value: 0 },
         uClouds: { value: 0 },
         uNight: { value: 0 },
+        uLite: { value: 0 },
         uZenith: { value: new THREE.Color(SKY_ZENITH) },
         uHorizon: { value: new THREE.Color(SKY_HORIZON) },
       },
@@ -925,6 +938,17 @@ export default function GrassSkyScene({
     vignetteQuad.frustumCulled = false
     vignetteScene.add(vignetteQuad)
 
+    const basePixelRatio = Math.min(window.devicePixelRatio, 1.5)
+    let tier = 0
+    const applyTier = () => {
+      const q = QUALITY_TIERS[tier]
+      renderer.setPixelRatio(Math.min(basePixelRatio, q.pr))
+      grass.count = Math.floor(BLADE_COUNT * q.blades)
+      farGrass.count = Math.floor(FAR_BLADE_COUNT * q.far)
+      skyMaterial.uniforms.uLite.value = q.lite
+      fireflies.material.uniforms.uSize.value = 80 * renderer.getPixelRatio()
+      resize()
+    }
     const resize = () => {
       const { clientWidth, clientHeight } = container
       renderer.setSize(clientWidth, clientHeight)
@@ -943,9 +967,14 @@ export default function GrassSkyScene({
     let raf: number
     let frame = 0
     let last = 0
+    // frame-time sampling window for the adaptive quality
+    let sampleTime = 0
+    let sampleFrames = 0
+    let warmup = 0
     const animate = () => {
       const t = (performance.now() - start) / 1000
-      const dt = Math.min(t - last, 0.1)
+      const rawDt = t - last
+      const dt = Math.min(rawDt, 0.1)
       last = t
       skyMaterial.uniforms.uTime.value = t
       grassMaterial.uniforms.uTime.value = t
@@ -978,6 +1007,25 @@ export default function GrassSkyScene({
       if (showField) {
         butterflies.update(t, butterflyTarget.current, k)
         fireflies.update(t, fireflyTarget.current, k)
+      }
+
+      // judge performance only while the field is on screen and the UI isn't deliberately halving the frame rate;
+      // the first couple of seconds are skipped since shader compiles and the pan itself cause one-off hitches
+      // a gap this long means the tab was backgrounded, not that the GPU is slow
+      if (!showField || view.throttled || rawDt > 0.25) {
+        warmup = 0
+        sampleTime = sampleFrames = 0
+      } else if ((warmup += rawDt) > 2.5 && tier < QUALITY_TIERS.length - 1) {
+        sampleTime += rawDt
+        sampleFrames++
+        if (sampleTime >= 1.5) {
+          if (sampleTime / sampleFrames > SLOW_FRAME_S) {
+            tier++
+            applyTier()
+            warmup = 0
+          }
+          sampleTime = sampleFrames = 0
+        }
       }
 
       // while the UI slides, draw every other frame: the scene keeps moving (30fps) but leaves the GPU room for the compositor
