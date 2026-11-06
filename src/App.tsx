@@ -571,7 +571,7 @@ function App() {
                       {
                         org: 'CoinFerenceX',
                         role: 'Web Developer Intern',
-                        dates: 'Jul 2026 – Aug 2026',
+                        dates: 'Aug 2026 – Oct 2026',
                         points: [
                           'Managed and maintained the company website end to end as the sole developer responsible for day to day upkeep.',
                           'Led a complete website upgrade covering structural design, technical enhancements, and performance optimizations.',
