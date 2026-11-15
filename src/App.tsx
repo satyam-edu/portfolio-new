@@ -666,6 +666,14 @@ function App() {
                       category: 'UI & Interfaces',
                       projects: [
                         {
+                          name: 'Endloops - Automation Company Website',
+                          logo: '/projects/endloops.png',
+                          liveUrl: 'https://endloops-sepia.vercel.app/',
+                          repo: 'https://github.com/satyam-edu/Endloops',
+                          desc: 'Multi-page marketing site for a finance automation company, led by a 3D scroll story where documents travel a conveyor and are read, checked and drafted until the visitor signs off. Includes solutions and tools pages with filtering, plus a validated contact form.',
+                          stack: ['React', 'TypeScript', 'Three.js', 'Tailwind CSS', 'React Router', 'Vite'],
+                        },
+                        {
                           name: 'Youth Global HQ',
                           logo: '/projects/youth.png',
                           liveUrl: 'https://youth-global-hq.vercel.app/',
